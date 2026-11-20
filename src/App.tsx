@@ -28,6 +28,7 @@ import {
   convertPolyforgeTracksToAnimationClip,
 } from './core/io';
 import { generateAnimatedBicycleCircuit } from './core/bicycle';
+import { generateRealisticHumanScene } from './core/character';
 import { history } from './core/history';
 import { TopNavbar } from './components/TopNavbar';
 import { LeftToolbar } from './components/LeftToolbar';
@@ -540,6 +541,18 @@ export const App: React.FC = () => {
     }));
   };
 
+  const handleAddRealisticHuman = () => {
+    const human = generateRealisticHumanScene();
+    setSceneItems((prev) => {
+      const filtered = prev.filter((it) => it.id !== 'default-cube');
+      return [...filtered, ...human.allItems];
+    });
+    setSelectedId(human.bodyItem.id);
+    if (engineRef.current) {
+      engineRef.current.focusObject(null);
+    }
+  };
+
   const handleExportOBJ = () => {
     if (engineRef.current) {
       exportToOBJ(engineRef.current.getUserMeshGroup(), 'polyforge-model');
@@ -744,6 +757,7 @@ export const App: React.FC = () => {
         isAIOpen={isAIOpen}
         onToggleAI={() => setIsAIOpen((prev) => !prev)}
         onAddAnimatedBicycle={handleAddAnimatedBicycle}
+        onAddRealisticHuman={handleAddRealisticHuman}
       />
 
       {/* Main Workspace Row: Toolbar + Viewport + Inspector */}

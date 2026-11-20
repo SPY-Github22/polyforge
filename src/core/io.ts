@@ -92,13 +92,25 @@ export function exportSceneToSTLString(items: SceneItem[]): string {
 // Polyfill FileReader, ImageData, and headless Canvas for Node.js CLI/server environments
 if (typeof globalThis !== 'undefined' && typeof (globalThis as any).FileReader === 'undefined') {
   class HeadlessFileReader {
-    public result: ArrayBuffer | null = null;
+    public result: ArrayBuffer | string | null = null;
     public onloadend: (() => void) | null = null;
     async readAsArrayBuffer(blob: Blob) {
       try {
         this.result = await blob.arrayBuffer();
       } catch {
         this.result = new ArrayBuffer(0);
+      }
+      if (this.onloadend) {
+        this.onloadend();
+      }
+    }
+    async readAsDataURL(blob: Blob) {
+      try {
+        const ab = await blob.arrayBuffer();
+        const base64 = Buffer.from(ab).toString('base64');
+        this.result = `data:${blob.type || 'application/octet-stream'};base64,${base64}`;
+      } catch {
+        this.result = '';
       }
       if (this.onloadend) {
         this.onloadend();

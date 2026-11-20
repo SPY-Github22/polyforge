@@ -42,6 +42,7 @@ interface TopNavbarProps {
   isAIOpen: boolean;
   onToggleAI: () => void;
   onAddAnimatedBicycle?: () => void;
+  onAddRealisticHuman?: () => void;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -67,6 +68,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   isAIOpen,
   onToggleAI,
   onAddAnimatedBicycle,
+  onAddRealisticHuman,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -324,8 +326,20 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   <>
                     <div className="my-1 border-t border-studio-800" />
                     <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                      Mechanical Simulation
+                      Procedural Models
                     </div>
+                    {onAddRealisticHuman && (
+                      <button
+                        onClick={() => {
+                          onAddRealisticHuman();
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center gap-2 text-indigo-400 font-medium"
+                      >
+                        <Sparkles size={12} className="text-indigo-400" />
+                        Realistic Human Character
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         onAddAnimatedBicycle();
