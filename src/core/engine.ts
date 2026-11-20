@@ -430,6 +430,8 @@ export class Engine {
         const mat = createMaterial(item.material, this.shadingMode);
 
         mesh = new THREE.Mesh(geoWithMods, mat);
+        mesh.name = item.name;
+        mesh.rotation.order = 'YXZ';
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.userData.materialProps = { ...item.material };
@@ -437,6 +439,8 @@ export class Engine {
         this.userMeshGroup.add(mesh);
         this.objectMap.set(item.id, mesh);
       } else {
+        mesh.name = item.name;
+        mesh.rotation.order = 'YXZ';
         // Recreate material if shading mode changed, or update properties in-place
         if (mesh.userData.shadingMode !== this.shadingMode) {
           if (Array.isArray(mesh.material)) {

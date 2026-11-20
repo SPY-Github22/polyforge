@@ -93,21 +93,21 @@ export function generateClosedCircuitTrajectory(
     else if (s <= L + turnArcLen) {
       const u = (s - L) / rTurn; // 0 to PI
       x = L + rTurn * Math.sin(u);
-      z = -rTurn + rTurn * Math.cos(u);
+      z = rTurn - rTurn * Math.cos(u);
       heading = -u; // 0 to -PI
     }
     // Segment 3: Return straight [L + turnArcLen, 2L + turnArcLen]
     else if (s <= 2 * L + turnArcLen) {
       const d = s - (L + turnArcLen); // 0 to L
       x = L - d;
-      z = -2 * rTurn;
+      z = 2 * rTurn;
       heading = -Math.PI;
     }
     // Segment 4: Turn 2 (Return 180° arc back to origin) [2L + turnArcLen, totalDist]
     else {
       const u = (s - (2 * L + turnArcLen)) / rTurn; // 0 to PI
       x = -rTurn * Math.sin(u);
-      z = -rTurn - rTurn * Math.cos(u);
+      z = rTurn + rTurn * Math.cos(u);
       heading = -Math.PI - u; // -PI to -2*PI
     }
 
@@ -155,11 +155,16 @@ export function generateClosedCircuitTrajectory(
     // Dynamic pedaling sway roll (cadence roll wobble)
     const swayRoll = swayAmp * Math.sin(2 * crankRotation) * (1 - 0.4 * curvatureFactor);
 
-    // Road micro-vibration and suspension pitch jitter
+    // Road micro-vibration and suspension pitch jitter with harmonic loop closure
+    const totalTime = totalFrames / fps;
+    const harmY1 = Math.round(13.5 * totalTime);
+    const harmY2 = Math.round(21.0 * totalTime);
+    const harmP1 = Math.round(17.0 * totalTime);
+    const harmP2 = Math.round(27.5 * totalTime);
     const jitterY =
-      vibAmp * Math.sin(2 * Math.PI * 13.5 * time) * Math.cos(2 * Math.PI * 21.0 * time);
+      vibAmp * Math.sin(2 * Math.PI * harmY1 * progress) * Math.cos(2 * Math.PI * harmY2 * progress);
     const jitterPitch =
-      0.0018 * Math.sin(2 * Math.PI * 17.0 * time) * Math.cos(2 * Math.PI * 27.5 * time);
+      0.0018 * Math.sin(2 * Math.PI * harmP1 * progress) * Math.cos(2 * Math.PI * harmP2 * progress);
 
     points.push({
       frame,

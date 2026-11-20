@@ -51,6 +51,7 @@ export function buildThreeGroupFromItems(items: SceneItem[]): THREE.Group {
       const mat = createMaterial(item.material, 'rendered');
       const mesh = new THREE.Mesh(geoWithMods, mat);
       mesh.name = item.name;
+      mesh.rotation.order = 'YXZ';
       mesh.position.set(item.transform.position[0], item.transform.position[1], item.transform.position[2]);
       mesh.rotation.set(item.transform.rotation[0], item.transform.rotation[1], item.transform.rotation[2]);
       mesh.scale.set(item.transform.scale[0], item.transform.scale[1], item.transform.scale[2]);

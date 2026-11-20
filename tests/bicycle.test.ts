@@ -289,11 +289,37 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
       expect(pedalRot[2]).toBe(0); // Z rotation is 0 (level under gravity)
     }
 
-    // 5. Steering & Banking: Front cockpit steers into arc and frame banks during turn
+    // 5. Steering & Banking: Front cockpit steers into arc and frame banks inward during turn
     const turnKeyframe = cockpitTrack.keyframes[120].transform;
     const frameTurnKeyframe = frameTrack.keyframes[120].transform;
     expect(turnKeyframe.rotation[1]).not.toBe(0); // Cockpit is steered
-    expect(frameTurnKeyframe.rotation[0]).toBeGreaterThan(0); // Leaning inward
+    expect(frameTurnKeyframe.rotation[0]).toBeGreaterThan(0); // Leaning inward for left turn
+
+    // Verify inward lean physically points toward center of circular turn
+    const pt120 = circuit.trajectory[120];
+    const euler120 = new THREE.Euler(frameTurnKeyframe.rotation[0], frameTurnKeyframe.rotation[1], 0, 'YXZ');
+    const up120 = new THREE.Vector3(0, 1, 0).applyEuler(euler120);
+    const upHoriz120 = new THREE.Vector3(up120.x, 0, up120.z).normalize();
+    // Center of Turn 1 is at (L, turnRadius) = (4.9637, 2.5)
+    const toCenter120 = new THREE.Vector3(4.9637 - pt120.position[0], 0, 2.5 - pt120.position[2]).normalize();
+    expect(upHoriz120.dot(toCenter120)).toBeGreaterThan(0.95);
+
+    // 6. Mechanical Integrity: Fork dropouts and front wheel axle coincide with 0 mm gap across all frames
+    const wheelRadius = 0.34;
+    const frontAxle = new THREE.Vector3(0.570, wheelRadius, 0.0);
+    const headTubeBottom = new THREE.Vector3(0.460, wheelRadius + 0.350, 0.0);
+    const frontAxleRelSteer = new THREE.Vector3().subVectors(frontAxle, headTubeBottom);
+
+    for (let f = 0; f <= 360; f += 15) {
+      const cKf = cockpitTrack.keyframes[f];
+      const wKf = frontWheelTrack.keyframes[f];
+      const eC = new THREE.Euler(cKf.transform.rotation[0], cKf.transform.rotation[1], cKf.transform.rotation[2], 'YXZ');
+      const qC = new THREE.Quaternion().setFromEuler(eC);
+      const pC = new THREE.Vector3(...cKf.transform.position);
+      const worldDropout = frontAxleRelSteer.clone().applyQuaternion(qC).add(pC);
+      const worldWheel = new THREE.Vector3(...wKf.transform.position);
+      expect(worldDropout.distanceTo(worldWheel)).toBeLessThan(0.0001); // Under 0.1 mm
+    }
   });
 
   it('exports animated bicycle scene to valid binary GLB buffer with embedded channels', async () => {

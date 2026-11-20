@@ -1,8 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { fileURLToPath } from 'url';
 import { generateAnimatedBicycleCircuit } from '../src/core/bicycle';
 import { exportSceneToGLTFBuffer, ProjectSaveData } from '../src/core/io';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function main() {
   console.log('Generating kinematically animated bicycle circuit...');

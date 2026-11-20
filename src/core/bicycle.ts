@@ -2597,7 +2597,12 @@ export function generateAnimatedBicycleCircuit(
       interpolation: 'linear',
     });
 
-    // 1. Cockpit: Fork & Handlebars steer into the turn
+    // 1. Cockpit: Fork & Handlebars steer into the turn around physical raked steerAxis
+    const steerRotAngle = -pt.steeringAngle;
+    const Q_steer = new THREE.Quaternion().setFromAxisAngle(steerAxis, steerRotAngle);
+    const Q_cockpit = Q_frame.clone().multiply(Q_steer);
+    const eCockpit = new THREE.Euler().setFromQuaternion(Q_cockpit, 'YXZ');
+
     const P_cockpit = new THREE.Vector3()
       .copy(headTubeBottom)
       .applyQuaternion(Q_frame)
@@ -2607,23 +2612,23 @@ export function generateAnimatedBicycleCircuit(
       frame: f,
       transform: {
         position: [P_cockpit.x, P_cockpit.y, P_cockpit.z],
-        rotation: [rollAngle, yawAngle + pt.steeringAngle, pitchAngle],
+        rotation: [eCockpit.x, eCockpit.y, eCockpit.z],
         scale: [1, 1, 1],
       },
       interpolation: 'linear',
     });
 
-    // 2. Front Wheel: Steers with fork, spins along axle
-    const Q_steer = new THREE.Quaternion().setFromAxisAngle(steerAxis, pt.steeringAngle);
-    const steeredFrontAxleOffset = frontAxleRelSteer.clone().applyQuaternion(Q_steer);
-    const r_front_frame = headTubeBottom.clone().add(steeredFrontAxleOffset);
-    const P_frontWheel = r_front_frame.applyQuaternion(Q_frame).add(P_frame);
+    // 2. Front Wheel: Steers with fork, spins along axle with 0 mm dropout gap
+    const P_frontWheel = frontAxleRelSteer
+      .clone()
+      .applyQuaternion(Q_cockpit)
+      .add(P_cockpit);
 
     frontWheelKeyframes.push({
       frame: f,
       transform: {
         position: [P_frontWheel.x, P_frontWheel.y, P_frontWheel.z],
-        rotation: [rollAngle, yawAngle + pt.steeringAngle, pt.wheelRotation],
+        rotation: [eCockpit.x, eCockpit.y, pt.wheelRotation + eCockpit.z],
         scale: [1, 1, 1],
       },
       interpolation: 'linear',

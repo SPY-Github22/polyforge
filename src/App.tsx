@@ -525,7 +525,10 @@ export const App: React.FC = () => {
 
   const handleAddAnimatedBicycle = () => {
     const circuit = generateAnimatedBicycleCircuit({ totalFrames: 360, fps: 30 });
-    setSceneItems((prev) => [...prev, ...circuit.items]);
+    setSceneItems((prev) => {
+      const filtered = prev.filter((it) => it.id !== 'default-cube');
+      return [...filtered, ...circuit.items];
+    });
     setTracks((prev) => [...prev, ...circuit.tracks]);
     setTimelineState((prev) => ({
       ...prev,
