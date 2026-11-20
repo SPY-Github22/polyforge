@@ -390,4 +390,57 @@ describe('Anatomical Character Engine (Realistic Human)', () => {
     }
     expect(downwardWristNormals).toBeGreaterThan(15);
   });
+
+  it('verifies high-poly realism overhaul standards (35,000+ vertices, articulated fingers, solid jacket)', () => {
+    const human = generateRealisticHumanScene();
+
+    // 1. High polygon density standard (35,000 - 70,000+ vertices across the model)
+    expect(human.stats.totalVertices).toBeGreaterThanOrEqual(35000);
+    expect(human.stats.totalTriangles).toBeGreaterThanOrEqual(50000);
+    expect(human.stats.bodyVertices).toBeGreaterThanOrEqual(25000);
+
+    // 2. Solid Fully-Enclosed Upper Garment: continuous cloth over deltoid shoulder caps
+    const shirtGeo = createPrimitiveGeometry(human.clothingUpperItem!.primitiveType || 'custom', human.clothingUpperItem!.geometryParams);
+    const shirtPos = shirtGeo.getAttribute('position') as THREE.BufferAttribute;
+
+    let shoulderDeltoidVerts = 0;
+    for (let i = 0; i < shirtPos.count; i++) {
+      const x = Math.abs(shirtPos.getX(i));
+      const y = shirtPos.getY(i);
+      if (x >= 0.18 && x <= 0.26 && y >= 1.40 && y <= 1.48) {
+        shoulderDeltoidVerts++;
+      }
+    }
+    expect(shoulderDeltoidVerts).toBeGreaterThan(50);
+
+    // 3. Articulated 5-Finger Hands with knuckles and phalanges in relaxed A-pose
+    const bodyGeo = createPrimitiveGeometry(human.bodyItem.primitiveType || 'custom', human.bodyItem.geometryParams);
+    const bodyPos = bodyGeo.getAttribute('position') as THREE.BufferAttribute;
+
+    let leftHandVerts = 0;
+    let rightHandVerts = 0;
+    for (let i = 0; i < bodyPos.count; i++) {
+      const x = bodyPos.getX(i);
+      const y = bodyPos.getY(i);
+      if (y >= 0.65 && y <= 0.85) {
+        if (x < -0.28) leftHandVerts++;
+        if (x > 0.28) rightHandVerts++;
+      }
+    }
+    expect(leftHandVerts).toBeGreaterThan(300);
+    expect(rightHandVerts).toBeGreaterThan(300);
+
+    // 4. Footwear Traction Tread & Heel Counter
+    const shoesGeo = createPrimitiveGeometry(human.footwearItem!.primitiveType || 'custom', human.footwearItem!.geometryParams);
+    const shoesPos = shoesGeo.getAttribute('position') as THREE.BufferAttribute;
+
+    let outsoleTreadVerts = 0;
+    for (let i = 0; i < shoesPos.count; i++) {
+      const y = shoesPos.getY(i);
+      if (y >= 0.001 && y <= 0.010) {
+        outsoleTreadVerts++;
+      }
+    }
+    expect(outsoleTreadVerts).toBeGreaterThan(40);
+  });
 });
