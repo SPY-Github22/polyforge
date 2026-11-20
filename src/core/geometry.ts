@@ -202,19 +202,29 @@ export function applyTwist(
 }
 
 /**
- * Midpoint face subdivision for triangle meshes.
+ * Midpoint face subdivision for triangle meshes, preserving UV coordinates and normals.
  */
 export function applySubdivisionRefinement(
   geometry: THREE.BufferGeometry,
   levels: number
 ): THREE.BufferGeometry {
+  if (!geometry.getAttribute('position') || levels <= 0) {
+    return geometry.clone();
+  }
+
   let currentGeo = geometry.toNonIndexed();
 
   for (let lvl = 0; lvl < levels; lvl++) {
     const pos = currentGeo.getAttribute('position') as THREE.BufferAttribute;
-    const triCount = pos.count / 3;
+    if (!pos || pos.count === 0) break;
+
+    const uvAttr = currentGeo.getAttribute('uv') as THREE.BufferAttribute | undefined;
+    const triCount = Math.floor(pos.count / 3);
     const newPos = new Float32Array(triCount * 4 * 3 * 3);
-    let outIdx = 0;
+    const newUv = uvAttr ? new Float32Array(triCount * 4 * 3 * 2) : null;
+
+    let outPosIdx = 0;
+    let outUvIdx = 0;
 
     for (let t = 0; t < triCount; t++) {
       const idx = t * 3;
@@ -228,9 +238,9 @@ export function applySubdivisionRefinement(
       const m20 = new THREE.Vector3().addVectors(v2, v0).multiplyScalar(0.5);
 
       const addTri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) => {
-        newPos[outIdx++] = a.x; newPos[outIdx++] = a.y; newPos[outIdx++] = a.z;
-        newPos[outIdx++] = b.x; newPos[outIdx++] = b.y; newPos[outIdx++] = b.z;
-        newPos[outIdx++] = c.x; newPos[outIdx++] = c.y; newPos[outIdx++] = c.z;
+        newPos[outPosIdx++] = a.x; newPos[outPosIdx++] = a.y; newPos[outPosIdx++] = a.z;
+        newPos[outPosIdx++] = b.x; newPos[outPosIdx++] = b.y; newPos[outPosIdx++] = b.z;
+        newPos[outPosIdx++] = c.x; newPos[outPosIdx++] = c.y; newPos[outPosIdx++] = c.z;
       };
 
       // 4 sub-triangles
@@ -238,10 +248,35 @@ export function applySubdivisionRefinement(
       addTri(m01, v1, m12);
       addTri(m20, m12, v2);
       addTri(m01, m12, m20);
+
+      // Handle UV interpolation if present
+      if (uvAttr && newUv) {
+        const u0: [number, number] = [uvAttr.getX(idx), uvAttr.getY(idx)];
+        const u1: [number, number] = [uvAttr.getX(idx + 1), uvAttr.getY(idx + 1)];
+        const u2: [number, number] = [uvAttr.getX(idx + 2), uvAttr.getY(idx + 2)];
+
+        const mu01: [number, number] = [(u0[0] + u1[0]) * 0.5, (u0[1] + u1[1]) * 0.5];
+        const mu12: [number, number] = [(u1[0] + u2[0]) * 0.5, (u1[1] + u2[1]) * 0.5];
+        const mu20: [number, number] = [(u2[0] + u0[0]) * 0.5, (u2[1] + u0[1]) * 0.5];
+
+        const addUvTri = (a: [number, number], b: [number, number], c: [number, number]) => {
+          newUv[outUvIdx++] = a[0]; newUv[outUvIdx++] = a[1];
+          newUv[outUvIdx++] = b[0]; newUv[outUvIdx++] = b[1];
+          newUv[outUvIdx++] = c[0]; newUv[outUvIdx++] = c[1];
+        };
+
+        addUvTri(u0, mu01, mu20);
+        addUvTri(mu01, u1, mu12);
+        addUvTri(mu20, mu12, u2);
+        addUvTri(mu01, mu12, mu20);
+      }
     }
 
     const nextGeo = new THREE.BufferGeometry();
     nextGeo.setAttribute('position', new THREE.BufferAttribute(newPos, 3));
+    if (newUv) {
+      nextGeo.setAttribute('uv', new THREE.BufferAttribute(newUv, 2));
+    }
     nextGeo.computeVertexNormals();
     currentGeo = nextGeo;
   }

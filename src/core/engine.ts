@@ -4,6 +4,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import {
   CameraView,
   EnvironmentSettings,
+  MaterialProperties,
   SceneItem,
   ShadingMode,
   TransformData,
@@ -39,10 +40,14 @@ export class Engine {
   private hemiLight: THREE.HemisphereLight;
   private studioRimLight: THREE.DirectionalLight;
 
+  // Dedicated container for user meshes (isolates 3D models from helpers for clean export)
+  public userMeshGroup: THREE.Group;
+
   // Object tracking
   private objectMap = new Map<string, THREE.Mesh>();
   private selectedId: string | null = null;
   private shadingMode: ShadingMode = 'rendered';
+  private currentTransformMode: TransformMode = 'translate';
 
   // Stats calculation
   private lastTime = performance.now();
@@ -60,6 +65,8 @@ export class Engine {
     // 1. Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color('#0d1117');
+    this.userMeshGroup = new THREE.Group();
+    this.scene.add(this.userMeshGroup);
 
     // 2. Camera
     const width = Math.max(1, container.clientWidth);
@@ -168,7 +175,13 @@ export class Engine {
 
   private onPointerDown = (event: PointerEvent) => {
     // Only handle primary left clicks and ignore if interacting with transform gizmo
-    if (event.button !== 0 || this.transformControls.dragging) return;
+    if (
+      event.button !== 0 ||
+      this.transformControls.dragging ||
+      (this.transformControls as any).axis !== null
+    ) {
+      return;
+    }
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -203,7 +216,16 @@ export class Engine {
     this.renderer.setSize(width, height);
   };
 
+  public setCallbacks(callbacks: EngineCallbacks) {
+    this.callbacks = callbacks;
+  }
+
+  public getUserMeshGroup(): THREE.Group {
+    return this.userMeshGroup;
+  }
+
   public setTransformMode(mode: TransformMode) {
+    this.currentTransformMode = mode;
     if (mode === 'select') {
       this.transformControls.detach();
     } else {
@@ -216,6 +238,19 @@ export class Engine {
 
   public setShadingMode(mode: ShadingMode) {
     this.shadingMode = mode;
+    // Immediately adapt materials of all active meshes to new shading mode
+    for (const [, mesh] of this.objectMap.entries()) {
+      const matProps = mesh.userData.materialProps as MaterialProperties | undefined;
+      if (matProps) {
+        if (Array.isArray(mesh.material)) {
+          mesh.material.forEach((m) => m.dispose());
+        } else {
+          mesh.material.dispose();
+        }
+        mesh.material = createMaterial(matProps, mode);
+        mesh.userData.shadingMode = mode;
+      }
+    }
   }
 
   public setCameraView(view: CameraView) {
@@ -244,11 +279,22 @@ export class Engine {
     this.orbitControls.update();
   }
 
+  public focusObject(id: string | null) {
+    if (!id || !this.objectMap.has(id)) return;
+    const mesh = this.objectMap.get(id)!;
+    this.orbitControls.target.copy(mesh.position);
+    this.orbitControls.update();
+  }
+
   public setSelectedObject(id: string | null) {
     this.selectedId = id;
     if (id && this.objectMap.has(id)) {
       const mesh = this.objectMap.get(id)!;
-      this.transformControls.attach(mesh);
+      if (this.currentTransformMode !== 'select') {
+        this.transformControls.attach(mesh);
+      } else {
+        this.transformControls.detach();
+      }
     } else {
       this.transformControls.detach();
     }
@@ -297,7 +343,7 @@ export class Engine {
         if (this.selectedId === id) {
           this.transformControls.detach();
         }
-        this.scene.remove(mesh);
+        this.userMeshGroup.remove(mesh);
         mesh.geometry.dispose();
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach((m) => m.dispose());
@@ -321,11 +367,24 @@ export class Engine {
         mesh = new THREE.Mesh(geoWithMods, mat);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        this.scene.add(mesh);
+        mesh.userData.materialProps = { ...item.material };
+        mesh.userData.shadingMode = this.shadingMode;
+        this.userMeshGroup.add(mesh);
         this.objectMap.set(item.id, mesh);
       } else {
-        // Update existing mesh transform
-        updateMaterial(mesh.material as THREE.Material, item.material, this.shadingMode);
+        // Recreate material if shading mode changed, or update properties in-place
+        if (mesh.userData.shadingMode !== this.shadingMode) {
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach((m) => m.dispose());
+          } else {
+            mesh.material.dispose();
+          }
+          mesh.material = createMaterial(item.material, this.shadingMode);
+          mesh.userData.shadingMode = this.shadingMode;
+        } else {
+          updateMaterial(mesh.material as THREE.Material, item.material, this.shadingMode);
+        }
+        mesh.userData.materialProps = { ...item.material };
       }
 
       mesh.position.set(item.transform.position[0], item.transform.position[1], item.transform.position[2]);
@@ -337,8 +396,12 @@ export class Engine {
     // Update active transform controls attachment
     if (this.selectedId && this.objectMap.has(this.selectedId)) {
       const selectedMesh = this.objectMap.get(this.selectedId)!;
-      if (this.transformControls.object !== selectedMesh) {
-        this.transformControls.attach(selectedMesh);
+      if (this.currentTransformMode !== 'select') {
+        if (this.transformControls.object !== selectedMesh) {
+          this.transformControls.attach(selectedMesh);
+        }
+      } else {
+        this.transformControls.detach();
       }
     }
   }
@@ -357,6 +420,33 @@ export class Engine {
 
   public getMeshById(id: string): THREE.Mesh | undefined {
     return this.objectMap.get(id);
+  }
+
+  /**
+   * Captures a clean viewport render snapshot without editing gizmos or grid lines.
+   */
+  public captureSnapshot(filename: string = 'polyforge-render.png') {
+    const gridVis = this.gridHelper.visible;
+    const axesVis = this.axesHelper.visible;
+    const gizmoVis = this.transformControls.getHelper().visible;
+
+    this.gridHelper.visible = false;
+    this.axesHelper.visible = false;
+    this.transformControls.getHelper().visible = false;
+
+    this.renderer.render(this.scene, this.camera);
+    const dataURL = this.renderer.domElement.toDataURL('image/png');
+    const anchor = document.createElement('a');
+    anchor.href = dataURL;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+
+    this.gridHelper.visible = gridVis;
+    this.axesHelper.visible = axesVis;
+    this.transformControls.getHelper().visible = gizmoVis;
+    this.renderer.render(this.scene, this.camera);
   }
 
   private animate = () => {

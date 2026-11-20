@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sliders,
   Palette,
@@ -38,6 +38,73 @@ interface RightInspectorProps {
   onDeleteModifier: (id: string, modId: string) => void;
 }
 
+const NumericInput: React.FC<{
+  value: number;
+  step?: number;
+  min?: number;
+  onChange: (val: number) => void;
+  className?: string;
+  isDegrees?: boolean;
+}> = ({ value, step = 0.1, min, onChange, className, isDegrees }) => {
+  const displayVal = isDegrees
+    ? Math.round(value * (180 / Math.PI))
+    : Number(value.toFixed(2));
+  const [localStr, setLocalStr] = useState<string>(String(displayVal));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalStr(String(displayVal));
+    }
+  }, [displayVal, isFocused]);
+
+  const commit = (str: string) => {
+    const parsed = parseFloat(str);
+    if (!isNaN(parsed)) {
+      const finalVal = min !== undefined ? Math.max(min, parsed) : parsed;
+      onChange(isDegrees ? finalVal * (Math.PI / 180) : finalVal);
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={isFocused ? localStr : String(displayVal)}
+      onFocus={() => {
+        setIsFocused(true);
+        setLocalStr(String(displayVal));
+      }}
+      onChange={(e) => {
+        setLocalStr(e.target.value);
+        commit(e.target.value);
+      }}
+      onBlur={() => {
+        setIsFocused(false);
+        commit(localStr);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          (e.target as HTMLInputElement).blur();
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          const cur = parseFloat(localStr) || 0;
+          const next = cur + (step || 1);
+          setLocalStr(String(Number(next.toFixed(2))));
+          commit(String(next));
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          const cur = parseFloat(localStr) || 0;
+          const next = cur - (step || 1);
+          setLocalStr(String(Number(next.toFixed(2))));
+          commit(String(next));
+        }
+      }}
+      className={className}
+    />
+  );
+};
+
 export const RightInspector: React.FC<RightInspectorProps> = ({
   sceneItems,
   selectedItem,
@@ -70,10 +137,10 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
     });
   };
 
-  const handleRotationChange = (axis: 0 | 1 | 2, degVal: number) => {
+  const handleRotationChange = (axis: 0 | 1 | 2, radVal: number) => {
     if (!selectedItem) return;
     const newRot: [number, number, number] = [...selectedItem.transform.rotation];
-    newRot[axis] = (isNaN(degVal) ? 0 : degVal) * (Math.PI / 180);
+    newRot[axis] = isNaN(radVal) ? 0 : radVal;
     onUpdateTransform(selectedItem.id, {
       ...selectedItem.transform,
       rotation: newRot,
@@ -261,11 +328,10 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                         <span className={`font-mono text-[11px] font-bold mr-1 ${idx === 0 ? 'text-red-400' : idx === 1 ? 'text-green-400' : 'text-blue-400'}`}>
                           {axis}
                         </span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={Number(selectedItem.transform.position[idx].toFixed(2))}
-                          onChange={(e) => handlePositionChange(idx as 0 | 1 | 2, parseFloat(e.target.value))}
+                        <NumericInput
+                          value={selectedItem.transform.position[idx]}
+                          step={0.1}
+                          onChange={(val) => handlePositionChange(idx as 0 | 1 | 2, val)}
                           className="w-full bg-transparent text-right font-mono text-slate-200 focus:outline-none"
                         />
                       </div>
@@ -277,23 +343,20 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rotation (Deg)</div>
                   <div className="grid grid-cols-3 gap-2">
-                    {(['X', 'Y', 'Z'] as const).map((axis, idx) => {
-                      const deg = Math.round(selectedItem.transform.rotation[idx] * (180 / Math.PI));
-                      return (
-                        <div key={axis} className="flex items-center bg-studio-950 border border-studio-800 rounded px-1.5 py-1">
-                          <span className={`font-mono text-[11px] font-bold mr-1 ${idx === 0 ? 'text-red-400' : idx === 1 ? 'text-green-400' : 'text-blue-400'}`}>
-                            {axis}
-                          </span>
-                          <input
-                            type="number"
-                            step="5"
-                            value={deg}
-                            onChange={(e) => handleRotationChange(idx as 0 | 1 | 2, parseFloat(e.target.value))}
-                            className="w-full bg-transparent text-right font-mono text-slate-200 focus:outline-none"
-                          />
-                        </div>
-                      );
-                    })}
+                    {(['X', 'Y', 'Z'] as const).map((axis, idx) => (
+                      <div key={axis} className="flex items-center bg-studio-950 border border-studio-800 rounded px-1.5 py-1">
+                        <span className={`font-mono text-[11px] font-bold mr-1 ${idx === 0 ? 'text-red-400' : idx === 1 ? 'text-green-400' : 'text-blue-400'}`}>
+                          {axis}
+                        </span>
+                        <NumericInput
+                          value={selectedItem.transform.rotation[idx]}
+                          isDegrees={true}
+                          step={5}
+                          onChange={(val) => handleRotationChange(idx as 0 | 1 | 2, val)}
+                          className="w-full bg-transparent text-right font-mono text-slate-200 focus:outline-none"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -306,12 +369,11 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                         <span className={`font-mono text-[11px] font-bold mr-1 ${idx === 0 ? 'text-red-400' : idx === 1 ? 'text-green-400' : 'text-blue-400'}`}>
                           {axis}
                         </span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0.01"
-                          value={Number(selectedItem.transform.scale[idx].toFixed(2))}
-                          onChange={(e) => handleScaleChange(idx as 0 | 1 | 2, parseFloat(e.target.value))}
+                        <NumericInput
+                          value={selectedItem.transform.scale[idx]}
+                          min={0.01}
+                          step={0.1}
+                          onChange={(val) => handleScaleChange(idx as 0 | 1 | 2, val)}
                           className="w-full bg-transparent text-right font-mono text-slate-200 focus:outline-none"
                         />
                       </div>

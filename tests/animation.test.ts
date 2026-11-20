@@ -153,5 +153,24 @@ describe('Keyframe Animation Engine', () => {
 
     expect(turntable.keyframes[2].frame).toBe(60);
     expect(turntable.keyframes[2].transform.rotation[1]).toBeCloseTo(Math.PI * 2);
+
+    // Continuous 360-degree rotation without gimbal flips
+    const at15 = evaluateTrackAtFrame(turntable, 15, fallbackTransform);
+    expect(at15.rotation[0]).toBeCloseTo(0);
+    expect(at15.rotation[2]).toBeCloseTo(0);
+    expect(at15.rotation[1]).toBeCloseTo(Math.PI / 2); // 90 degrees
+
+    const at20 = evaluateTrackAtFrame(turntable, 20, fallbackTransform);
+    expect(at20.rotation[0]).toBeCloseTo(0);
+    expect(at20.rotation[2]).toBeCloseTo(0);
+    expect(at20.rotation[1]).toBeCloseTo((Math.PI * 2) / 3); // 120 degrees
+
+    const at45 = evaluateTrackAtFrame(turntable, 45, fallbackTransform);
+    expect(at45.rotation[0]).toBeCloseTo(0);
+    expect(at45.rotation[2]).toBeCloseTo(0);
+    expect(at45.rotation[1]).toBeCloseTo((Math.PI * 3) / 2); // 270 degrees
+
+    const at60 = evaluateTrackAtFrame(turntable, 60, fallbackTransform);
+    expect(at60.rotation[1]).toBeCloseTo(Math.PI * 2); // 360 degrees
   });
 });

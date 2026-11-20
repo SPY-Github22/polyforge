@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import { AnimationTrack, Keyframe, TransformData } from '../types';
 
 /**
@@ -81,16 +80,12 @@ export function evaluateTrackAtFrame(
     prev.transform.position[2] + (next.transform.position[2] - prev.transform.position[2]) * alpha,
   ];
 
-  // Quaternion slerp for rotation to eliminate gimbal lock artifacts
-  const qPrev = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(prev.transform.rotation[0], prev.transform.rotation[1], prev.transform.rotation[2])
-  );
-  const qNext = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(next.transform.rotation[0], next.transform.rotation[1], next.transform.rotation[2])
-  );
-  qPrev.slerp(qNext, alpha);
-  const euler = new THREE.Euler().setFromQuaternion(qPrev);
-  const rot: [number, number, number] = [euler.x, euler.y, euler.z];
+  // Rotation interpolation (Euler angles in radians with continuous revolution preservation)
+  const rot: [number, number, number] = [
+    prev.transform.rotation[0] + (next.transform.rotation[0] - prev.transform.rotation[0]) * alpha,
+    prev.transform.rotation[1] + (next.transform.rotation[1] - prev.transform.rotation[1]) * alpha,
+    prev.transform.rotation[2] + (next.transform.rotation[2] - prev.transform.rotation[2]) * alpha,
+  ];
 
   // Scale interpolation
   const sca: [number, number, number] = [

@@ -74,4 +74,31 @@ describe('Project IO and Serialization', () => {
       'Invalid project file format: missing items array.'
     );
   });
+
+  it('heals and sanitizes incomplete or malformed item fields with safe defaults', () => {
+    const partialJson = JSON.stringify({
+      version: '1.0.0',
+      items: [
+        {
+          id: 'test-broken',
+          // missing name, type, transform, material, modifiers
+        },
+      ],
+    });
+
+    const parsed = parseProjectFile(partialJson);
+    expect(parsed.items.length).toBe(1);
+    const item = parsed.items[0];
+    expect(item.id).toBe('test-broken');
+    expect(item.name).toBe('Object 1');
+    expect(item.transform.position).toEqual([0, 0, 0]);
+    expect(item.transform.rotation).toEqual([0, 0, 0]);
+    expect(item.transform.scale).toEqual([1, 1, 1]);
+    expect(item.material.color).toBe('#388bfd');
+    expect(item.modifiers).toEqual([]);
+  });
+
+  it('throws clear syntax error on malformed JSON string', () => {
+    expect(() => parseProjectFile('{ broken json: ')).toThrow('Corrupted JSON file');
+  });
 });

@@ -23,7 +23,6 @@ import {
   exportToGLTF,
   exportToOBJ,
   exportToSTL,
-  captureViewportImage,
   exportProjectFile,
   parseProjectFile,
 } from './core/io';
@@ -109,6 +108,13 @@ export const App: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<Engine | null>(null);
 
+  // Synchronized refs to avoid stale closures in engine callbacks
+  const sceneItemsRef = useRef(sceneItems);
+  sceneItemsRef.current = sceneItems;
+
+  const timelineStateRef = useRef(timelineState);
+  timelineStateRef.current = timelineState;
+
   // Subscribe to history changes for Undo/Redo button updates
   useEffect(() => {
     return history.subscribe(() => setHistoryTick((t) => t + 1));
@@ -126,8 +132,9 @@ export const App: React.FC = () => {
         );
       },
       onTransformCommit: (id, committedTransform) => {
-        // Record undoable history step
-        const oldItem = sceneItems.find((it) => it.id === id);
+        // Record undoable history step using latest state
+        const currentItems = sceneItemsRef.current;
+        const oldItem = currentItems.find((it) => it.id === id);
         if (oldItem) {
           const prevTransform = { ...oldItem.transform };
           history.record({
@@ -145,9 +152,21 @@ export const App: React.FC = () => {
           });
         }
 
-        // Auto-keying check
-        if (timelineState.autoKeying) {
-          handleAddKeyframeForObject(id, committedTransform);
+        // Auto-keying check with latest timeline state
+        if (timelineStateRef.current.autoKeying) {
+          setTracks((prev) => {
+            let existingTrack = prev.find((t) => t.objectId === id);
+            if (!existingTrack) {
+              existingTrack = { objectId: id, keyframes: [] };
+            }
+            const updatedTrack = insertOrUpdateKeyframe(
+              existingTrack,
+              timelineStateRef.current.currentFrame,
+              committedTransform,
+              'ease-in-out'
+            );
+            return [...prev.filter((t) => t.objectId !== id), updatedTrack];
+          });
         }
       },
       onStatsUpdate: (newStats) => setStats(newStats),
@@ -323,7 +342,8 @@ export const App: React.FC = () => {
         rotation: [...source.transform.rotation],
         scale: [...source.transform.scale],
       },
-      modifiers: source.modifiers ? [...source.modifiers] : [],
+      material: { ...source.material },
+      modifiers: source.modifiers ? source.modifiers.map((m) => ({ ...m })) : [],
     };
 
     history.execute({
@@ -344,6 +364,10 @@ export const App: React.FC = () => {
     setSceneItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, transform: newTransform } : item))
     );
+
+    if (timelineStateRef.current.autoKeying) {
+      handleAddKeyframeForObject(id, newTransform);
+    }
   };
 
   // Update Material
@@ -484,25 +508,25 @@ export const App: React.FC = () => {
 
   const handleExportGLTF = (binary: boolean) => {
     if (engineRef.current) {
-      exportToGLTF(engineRef.current.scene, binary, 'polyforge-model');
+      exportToGLTF(engineRef.current.getUserMeshGroup(), binary, 'polyforge-model');
     }
   };
 
   const handleExportOBJ = () => {
     if (engineRef.current) {
-      exportToOBJ(engineRef.current.scene, 'polyforge-model');
+      exportToOBJ(engineRef.current.getUserMeshGroup(), 'polyforge-model');
     }
   };
 
   const handleExportSTL = () => {
     if (engineRef.current) {
-      exportToSTL(engineRef.current.scene, true, 'polyforge-model');
+      exportToSTL(engineRef.current.getUserMeshGroup(), true, 'polyforge-model');
     }
   };
 
   const handleCaptureSnapshot = () => {
     if (engineRef.current) {
-      captureViewportImage(engineRef.current.renderer, 'polyforge-render.png');
+      engineRef.current.captureSnapshot('polyforge-render.png');
     }
   };
 
@@ -566,6 +590,15 @@ export const App: React.FC = () => {
         setTransformMode('scale');
       } else if (key === 'q') {
         setTransformMode('select');
+      }
+
+      // Camera Focus & Reset Hotkeys
+      if (key === 'f') {
+        if (selectedId && engineRef.current) {
+          engineRef.current.focusObject(selectedId);
+        }
+      } else if (e.key === 'Home') {
+        setCameraView('perspective');
       }
 
       // Playback Spacebar
@@ -656,15 +689,10 @@ export const App: React.FC = () => {
           cameraView={cameraView}
           transformMode={transformMode}
           selectedObjectName={selectedItem ? selectedItem.name : null}
-          onResetCamera={() => engineRef.current?.setCameraView('perspective')}
+          onResetCamera={() => setCameraView('perspective')}
           onFocusSelected={() => {
-            if (selectedItem && engineRef.current) {
-              engineRef.current.orbitControls.target.set(
-                selectedItem.transform.position[0],
-                selectedItem.transform.position[1],
-                selectedItem.transform.position[2]
-              );
-              engineRef.current.orbitControls.update();
+            if (selectedId && engineRef.current) {
+              engineRef.current.focusObject(selectedId);
             }
           }}
           onChangeCameraView={setCameraView}

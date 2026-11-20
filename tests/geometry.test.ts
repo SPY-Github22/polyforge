@@ -97,6 +97,11 @@ describe('Geometry Engine', () => {
     // Each triangle gets divided into 4 subtriangles
     expect(newStats.triangles).toBe(baseStats.triangles * 4);
     expect(newStats.vertices).toBe(baseStats.triangles * 4 * 3);
+
+    // UVs must be preserved for texturing to work
+    const uvAttr = subdivided.getAttribute('uv');
+    expect(uvAttr).toBeDefined();
+    expect(uvAttr.count).toBe(newStats.vertices);
   });
 
   it('returns cloned geometry if modifiers array is empty or disabled', () => {
@@ -107,5 +112,15 @@ describe('Geometry Engine', () => {
       { id: '1', type: 'twist', factor: 0, enabled: false },
     ]);
     expect(result.getAttribute('position').count).toBe(baseCount);
+  });
+
+  it('handles subdivision edge cases cleanly (levels=0 or empty geometry)', () => {
+    const box = createPrimitiveGeometry('box');
+    const zeroSub = applySubdivisionRefinement(box, 0);
+    expect(zeroSub.getAttribute('position').count).toBe(box.getAttribute('position').count);
+
+    const empty = new (box.constructor as typeof import('three').BufferGeometry)();
+    const emptySub = applySubdivisionRefinement(empty, 1);
+    expect(emptySub).toBeDefined();
   });
 });

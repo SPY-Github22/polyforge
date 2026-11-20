@@ -9,6 +9,7 @@ const textureCache = new Map<TexturePreset, THREE.CanvasTexture>();
  */
 export function getProceduralTexture(type: TexturePreset): THREE.Texture | null {
   if (type === 'none') return null;
+  if (typeof document === 'undefined') return null;
   if (textureCache.has(type)) return textureCache.get(type)!;
 
   const canvas = document.createElement('canvas');
