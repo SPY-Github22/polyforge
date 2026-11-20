@@ -387,11 +387,12 @@ export async function executePolyForgeScript(
   try {
     // Wrap script inside an async function to allow await
     // Provide polyforge, standard Math utilities, and console
+    // Explicitly shadow and neutralize host-level globals (process, require, global, globalThis)
     const wrappedCode = `
-      return (async function(polyforge, Math, console) {
+      return (async function(polyforge, Math, console, process, require, window, document, global, globalThis) {
         "use strict";
         ${code}
-      })(api, Math, consoleShim);
+      })(api, Math, consoleShim, undefined, undefined, undefined, undefined, undefined, undefined);
     `;
 
     const runner = new Function('api', 'Math', 'consoleShim', wrappedCode);

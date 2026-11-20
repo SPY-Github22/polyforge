@@ -13,32 +13,43 @@ function smoothstep(t: number): number {
 export function evaluateTrackAtFrame(
   track: AnimationTrack,
   frame: number,
-  fallbackTransform: TransformData
+  fallbackTransform: TransformData = {
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+  }
 ): TransformData {
-  if (!track.keyframes || track.keyframes.length === 0) {
+  if (!track || !track.keyframes || track.keyframes.length === 0) {
     return fallbackTransform;
   }
+
+  const safeExtract = (t?: Partial<TransformData>): TransformData => ({
+    position:
+      Array.isArray(t?.position) && t.position.length === 3
+        ? [Number(t.position[0]) || 0, Number(t.position[1]) || 0, Number(t.position[2]) || 0]
+        : [...fallbackTransform.position],
+    rotation:
+      Array.isArray(t?.rotation) && t.rotation.length === 3
+        ? [Number(t.rotation[0]) || 0, Number(t.rotation[1]) || 0, Number(t.rotation[2]) || 0]
+        : [...fallbackTransform.rotation],
+    scale:
+      Array.isArray(t?.scale) && t.scale.length === 3
+        ? [Number(t.scale[0]) || 1, Number(t.scale[1]) || 1, Number(t.scale[2]) || 1]
+        : [...fallbackTransform.scale],
+  });
 
   // Sort keyframes by frame number ascending
   const sorted = [...track.keyframes].sort((a, b) => a.frame - b.frame);
 
   // Before first keyframe
   if (frame <= sorted[0].frame) {
-    return {
-      position: [...sorted[0].transform.position],
-      rotation: [...sorted[0].transform.rotation],
-      scale: [...sorted[0].transform.scale],
-    };
+    return safeExtract(sorted[0].transform);
   }
 
   // After last keyframe
   if (frame >= sorted[sorted.length - 1].frame) {
     const last = sorted[sorted.length - 1];
-    return {
-      position: [...last.transform.position],
-      rotation: [...last.transform.rotation],
-      scale: [...last.transform.scale],
-    };
+    return safeExtract(last.transform);
   }
 
   // Find surrounding keyframes

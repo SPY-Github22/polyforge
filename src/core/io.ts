@@ -68,9 +68,13 @@ export function buildThreeGroupFromItems(items: SceneItem[]): THREE.Group {
  * Works in both browser and server/CLI environments.
  */
 export function exportSceneToOBJString(items: SceneItem[]): string {
+  if (!items || items.length === 0) {
+    return '# PolyForge Wavefront OBJ Exporter\n# Scene is empty (0 objects)\n';
+  }
   const group = buildThreeGroupFromItems(items);
   const exporter = new OBJExporter();
-  return exporter.parse(group);
+  const res = exporter.parse(group);
+  return res || '# PolyForge Wavefront OBJ Exporter\n# Scene is empty (0 objects)\n';
 }
 
 /**
@@ -238,9 +242,9 @@ export function parseProjectFile(jsonContent: string): ProjectSaveData {
     const sca =
       Array.isArray(raw.transform?.scale) && raw.transform.scale.length === 3
         ? [
-            Number(raw.transform.scale[0]) || 1,
-            Number(raw.transform.scale[1]) || 1,
-            Number(raw.transform.scale[2]) || 1,
+            Math.max(0.0001, Math.abs(Number(raw.transform.scale[0]) || 1)),
+            Math.max(0.0001, Math.abs(Number(raw.transform.scale[1]) || 1)),
+            Math.max(0.0001, Math.abs(Number(raw.transform.scale[2]) || 1)),
           ] as [number, number, number]
         : ([1, 1, 1] as [number, number, number]);
 
@@ -295,12 +299,21 @@ export function parseProjectFile(jsonContent: string): ProjectSaveData {
 
   const sanitizedTracks: AnimationTrack[] = Array.isArray(parsed.tracks)
     ? parsed.tracks
-        .filter((t: any) => t && typeof t === 'object' && typeof t.objectId === 'string')
-        .map((t: any) => ({
-          objectId: t.objectId,
-          keyframes: Array.isArray(t.keyframes)
-            ? t.keyframes.map((k: any) => ({
-                frame: typeof k.frame === 'number' ? k.frame : 0,
+        .filter((t: any) => {
+          if (!t || typeof t !== 'object') return false;
+          const objId = typeof t.objectId === 'string' && t.objectId ? t.objectId : (typeof t.targetId === 'string' && t.targetId ? t.targetId : (typeof t.id === 'string' ? t.id : ''));
+          return Boolean(objId);
+        })
+        .map((t: any) => {
+          const objectId = typeof t.objectId === 'string' && t.objectId ? t.objectId : (typeof t.targetId === 'string' && t.targetId ? t.targetId : (typeof t.id === 'string' ? t.id : ''));
+          return {
+            objectId,
+            keyframes: Array.isArray(t.keyframes)
+              ? t.keyframes.map((k: any) => ({
+                  frame:
+                    typeof k.frame === 'number' && Number.isFinite(k.frame)
+                      ? Math.max(0, Math.round(k.frame))
+                      : 0,
                 transform: {
                   position: Array.isArray(k.transform?.position)
                     ? [
@@ -329,7 +342,8 @@ export function parseProjectFile(jsonContent: string): ProjectSaveData {
                   : 'linear',
               }))
             : [],
-        }))
+        };
+      })
     : [];
 
   const rawEnv =

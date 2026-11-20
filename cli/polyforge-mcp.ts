@@ -573,7 +573,15 @@ export class PolyForgeMCPServer {
           process.stdout.write(JSON.stringify(response) + '\n');
         }
       } catch (err) {
-        process.stderr.write(`[PolyForge MCP Parse Error] ${err}\n`);
+        const parseError = {
+          jsonrpc: '2.0',
+          id: null,
+          error: {
+            code: -32700,
+            message: `Parse error: Invalid JSON payload (${err instanceof Error ? err.message : String(err)})`,
+          },
+        };
+        process.stdout.write(JSON.stringify(parseError) + '\n');
       }
     });
 
