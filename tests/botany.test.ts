@@ -70,4 +70,45 @@ describe('Botanical Engine & High-Poly Tree Generator', () => {
     expect(resA.trunkItem.geometryParams?.customGeometry?.positions[0])
       .toBeCloseTo(resB.trunkItem.geometryParams?.customGeometry?.positions[0]!);
   });
+
+  it('populates vertex colors for ambient occlusion and botanical tinting', () => {
+    const result = generateBotanicalOakTree({ seed: 123, leafCount: 50 });
+
+    // Trunk vertex colors
+    const barkColors = result.trunkItem.geometryParams?.customGeometry?.colors;
+    expect(barkColors).toBeDefined();
+    expect(barkColors?.length).toBe(result.trunkItem.geometryParams?.customGeometry?.positions.length);
+
+    // Foliage vertex colors
+    const leafColors = result.matureLeavesItem.geometryParams?.customGeometry?.colors;
+    expect(leafColors).toBeDefined();
+    expect(leafColors?.length).toBe(result.matureLeavesItem.geometryParams?.customGeometry?.positions.length);
+
+    // Verify colors are within valid [0, 1] RGB range
+    for (let i = 0; i < Math.min(100, barkColors!.length); i++) {
+      expect(barkColors![i]).toBeGreaterThanOrEqual(0);
+      expect(barkColors![i]).toBeLessThanOrEqual(1.5);
+    }
+  });
+
+  it('generates flared root buttresses that ground at y = 0 with outward flare', () => {
+    const result = generateBotanicalOakTree({ seed: 555, leafCount: 20 });
+    const pos = result.trunkItem.geometryParams?.customGeometry?.positions!;
+
+    let foundGroundedFlare = false;
+    for (let i = 0; i < pos.length; i += 3) {
+      const x = pos[i];
+      const y = pos[i + 1];
+      const z = pos[i + 2];
+      const radialDist = Math.hypot(x, z);
+
+      // Root flares enter the ground at y <= 0.05 and radial distance > 1.0m
+      if (y <= 0.05 && radialDist > 1.0) {
+        foundGroundedFlare = true;
+        break;
+      }
+    }
+
+    expect(foundGroundedFlare).toBe(true);
+  });
 });

@@ -3,16 +3,16 @@ import { MaterialProperties, SceneItem } from '../types';
 
 export interface BotanicalTreeOptions {
   seed?: number;
-  trunkHeight?: number;       // overall height, default ~9.0
+  trunkHeight?: number;       // overall height, default ~9.2
   trunkRadius?: number;       // base radius, default ~0.38
   crownSpread?: number;       // canopy spread radius, default ~5.2
   scaffoldBranches?: number;  // count of major limbs, default 6
-  radialSegments?: number;    // cross-section resolution, default 12
-  leafCount?: number;         // number of leaf clusters, default 3600
-  leafScale?: number;         // size of individual leaf blades, default 0.28
-  barkColor?: string;         // default '#3a2414'
-  leafColor1?: string;        // mature oak leaf, default '#265420'
-  leafColor2?: string;        // young/sunlit oak leaf, default '#447f2b'
+  radialSegments?: number;    // cross-section resolution, default 14
+  leafCount?: number;         // number of leaf sprays/clusters, default 1600
+  leafScale?: number;         // size of individual leaf blades, default 0.32
+  barkColor?: string;         // default '#3e2716'
+  leafColor1?: string;        // mature oak leaf, default '#27521e'
+  leafColor2?: string;        // young/sunlit oak leaf, default '#46832a'
 }
 
 export interface BotanicalTreeResult {
@@ -55,6 +55,8 @@ interface Branch {
 
 /**
  * Builds a lofted cylinder mesh along a 3D branch spline path.
+ * Supports rotation-minimizing frame (RMF), organic longitudinal bark creasing,
+ * crevice ambient occlusion vertex colors, and optional start/end end caps.
  */
 function loftBranch(
   branch: Branch,
@@ -64,7 +66,10 @@ function loftBranch(
   outPositions: number[],
   outNormals: number[],
   outUvs: number[],
-  outIndices: number[]
+  outColors: number[],
+  outIndices: number[],
+  capStart: boolean = false,
+  capEnd: boolean = false
 ): { endV: number } {
   const nodes = branch.nodes;
   if (nodes.length < 2) return { endV: vOffset };
@@ -72,7 +77,7 @@ function loftBranch(
   const ringVertexStart = outPositions.length / 3;
   let currentV = vOffset;
 
-  // Pre-calculate rotation-minimizing frame (RMF) or stable Frenet frame along curve
+  // Tangents along curve
   const tangents: THREE.Vector3[] = [];
   const normals: THREE.Vector3[] = [];
   const binormals: THREE.Vector3[] = [];
@@ -127,6 +132,24 @@ function loftBranch(
 
     const n = normals[i];
     const b = binormals[i];
+    const yVal = node.point.y;
+
+    // Height-based bark base color
+    let baseR = 0.26;
+    let baseG = 0.18;
+    let baseB = 0.12;
+
+    if (yVal < 0.8) {
+      // Base near ground: rich earth umber
+      baseR = 0.20;
+      baseG = 0.14;
+      baseB = 0.09;
+    } else if (yVal > 4.5) {
+      // Upper crown twigs: weathered grey-brown
+      baseR = 0.35;
+      baseG = 0.28;
+      baseB = 0.20;
+    }
 
     // Radial ring vertices (+ 1 for UV seam wrap)
     for (let j = 0; j <= radialSegments; j++) {
@@ -135,7 +158,9 @@ function loftBranch(
       const sinT = Math.sin(theta);
 
       // Organic furrow modulation for realistic oak bark creasing
-      const furrow = 1.0 + Math.sin(theta * 8.0 + node.point.y * 3.0) * 0.04 + Math.cos(theta * 14.0) * 0.02;
+      const furrow = 1.0 +
+        Math.sin(theta * 8.0 + node.point.y * 2.5) * 0.05 +
+        Math.cos(theta * 14.0) * 0.025;
       const r = node.radius * furrow;
 
       const px = node.point.x + (n.x * cosT + b.x * sinT) * r;
@@ -149,6 +174,10 @@ function loftBranch(
       outPositions.push(px, py, pz);
       outNormals.push(nx, ny, nz);
       outUvs.push(j / radialSegments, currentV);
+
+      // Vertex color with crevice Ambient Occlusion: ridges are brighter, furrows darker
+      const ao = THREE.MathUtils.clamp(furrow * 0.95, 0.7, 1.15);
+      outColors.push(baseR * ao, baseG * ao, baseB * ao);
     }
   }
 
@@ -170,112 +199,182 @@ function loftBranch(
     }
   }
 
+  // Optional start cap (e.g. trunk base)
+  if (capStart && nodes.length > 0) {
+    const startCenterIdx = outPositions.length / 3;
+    const startNode = nodes[0];
+    const revNormal = tangents[0].clone().negate();
+
+    outPositions.push(startNode.point.x, startNode.point.y, startNode.point.z);
+    outNormals.push(revNormal.x, revNormal.y, revNormal.z);
+    outUvs.push(0.5, 0.5);
+    outColors.push(0.18, 0.12, 0.08);
+
+    const firstRing = ringVertexStart;
+    for (let j = 0; j < radialSegments; j++) {
+      outIndices.push(startCenterIdx, firstRing + j + 1, firstRing + j);
+    }
+  }
+
+  // Optional end cap (e.g. branch/twig tip or root tip)
+  if (capEnd && nodes.length > 0) {
+    const endCenterIdx = outPositions.length / 3;
+    const endNode = nodes[nodes.length - 1];
+    const fwdNormal = tangents[tangents.length - 1].clone();
+
+    outPositions.push(endNode.point.x, endNode.point.y, endNode.point.z);
+    outNormals.push(fwdNormal.x, fwdNormal.y, fwdNormal.z);
+    outUvs.push(0.5, 0.5);
+    outColors.push(0.32, 0.25, 0.18);
+
+    const lastRing = ringVertexStart + (nodes.length - 1) * ringStride;
+    for (let j = 0; j < radialSegments; j++) {
+      outIndices.push(endCenterIdx, lastRing + j, lastRing + j + 1);
+    }
+  }
+
   return { endV: currentV };
 }
 
 /**
- * Creates 3D curved realistic oak leaf mesh elements.
- * Each oak leaf has a curved central vein crease, 3 lobes on each side, and realistic petiole stem.
+ * Constructs a botanical oak leaf spray (branchlet bouquet) attached to a twig.
+ * Generates 3-4 angled, curved leaf cards mapped precisely to the oak leaf atlas,
+ * featuring phototropic elevation, chlorophyll vertex colors, and double-sided visibility.
  */
-function createOakLeafGeometry(
-  leafOrigin: THREE.Vector3,
-  tangentDir: THREE.Vector3,
+function createOakLeafSpray(
+  origin: THREE.Vector3,
+  stemDir: THREE.Vector3,
   upDir: THREE.Vector3,
   scale: number,
+  isYoung: boolean,
+  rng: () => number,
   outPositions: number[],
   outNormals: number[],
   outUvs: number[],
+  outColors: number[],
   outIndices: number[]
 ) {
-  const baseIdx = outPositions.length / 3;
-
-  const fwd = tangentDir.clone().normalize();
+  const fwd = stemDir.clone().normalize();
   const side = new THREE.Vector3().crossVectors(fwd, upDir).normalize();
   const up = new THREE.Vector3().crossVectors(side, fwd).normalize();
 
-  // 7 key spine stations along the leaf length (petiole to tip)
-  // Each station has center spine vertex, left margin vertex, and right margin vertex
-  const stations = [
-    { frac: 0.0, halfWidth: 0.02, spineLift: 0.0, marginDrop: 0.0 },     // Petiole base
-    { frac: 0.15, halfWidth: 0.18, spineLift: 0.01, marginDrop: -0.01 },  // Lower lobe 1
-    { frac: 0.35, halfWidth: 0.28, spineLift: 0.03, marginDrop: -0.02 },  // Waist sinus
-    { frac: 0.55, halfWidth: 0.36, spineLift: 0.04, marginDrop: -0.03 },  // Middle lobe 2 (widest)
-    { frac: 0.75, halfWidth: 0.26, spineLift: 0.03, marginDrop: -0.02 },  // Upper lobe 3
-    { frac: 0.90, halfWidth: 0.14, spineLift: 0.015, marginDrop: -0.01 }, // Sub-apex
-    { frac: 1.0, halfWidth: 0.005, spineLift: 0.0, marginDrop: 0.0 },    // Tip apex
+  // Chlorophyll colors for vertex tinting
+  const stemCol = isYoung ? [0.38, 0.36, 0.18] : [0.30, 0.28, 0.14];
+  const leafBaseCol = isYoung ? [0.24, 0.48, 0.16] : [0.15, 0.35, 0.12];
+  const leafTipCol = isYoung ? [0.45, 0.72, 0.22] : [0.28, 0.55, 0.18];
+
+  // Leaf configuration within the spray:
+  // 3-4 leaves angled in 3D around the twig stem
+  const leafAngles = [
+    { yaw: 0.0, pitch: 0.15, roll: 0.0, scaleMult: 1.05, atlasCol: 0 },       // Center main leaf
+    { yaw: 0.55, pitch: 0.30, roll: 0.25, scaleMult: 0.92, atlasCol: 1 },     // Right fanned leaf
+    { yaw: -0.55, pitch: 0.28, roll: -0.25, scaleMult: 0.90, atlasCol: 0 },    // Left fanned leaf
+    { yaw: (rng() - 0.5) * 0.4, pitch: -0.20, roll: 0.1, scaleMult: 0.82, atlasCol: 1 }, // Lower tuck leaf
   ];
 
-  const L = scale;
-  const W = scale * 0.85;
+  for (let l = 0; l < leafAngles.length; l++) {
+    const la = leafAngles[l];
+    const leafScale = scale * la.scaleMult * (0.9 + rng() * 0.2);
 
-  for (let i = 0; i < stations.length; i++) {
-    const st = stations[i];
-    const distFwd = st.frac * L;
-    const curW = st.halfWidth * W;
+    // Compute leaf forward and side vectors with 3D orientation
+    const leafFwd = fwd.clone()
+      .applyAxisAngle(up, la.yaw)
+      .applyAxisAngle(side, la.pitch)
+      .normalize();
+    const leafSide = new THREE.Vector3().crossVectors(leafFwd, up).normalize();
+    const leafUp = new THREE.Vector3().crossVectors(leafSide, leafFwd).normalize();
 
-    // Center spine vertex (slight arch along length)
-    const spineArch = Math.sin(st.frac * Math.PI) * (scale * 0.08) + st.spineLift * scale;
-    const centerPos = leafOrigin.clone()
-      .addScaledVector(fwd, distFwd)
-      .addScaledVector(up, spineArch);
+    // Atlas UV coordinates:
+    // Leaf 0 (atlasCol === 0): U in [0.05..0.48]
+    // Leaf 1 (atlasCol === 1): U in [0.52..0.95]
+    const minU = la.atlasCol === 0 ? 0.05 : 0.52;
+    const maxU = la.atlasCol === 0 ? 0.48 : 0.95;
+    const midU = (minU + maxU) * 0.5;
 
-    // Left margin vertex (slight downward curl)
-    const leftPos = centerPos.clone()
-      .addScaledVector(side, -curW)
-      .addScaledVector(up, st.marginDrop * scale);
+    const baseIdx = outPositions.length / 3;
 
-    // Right margin vertex (slight downward curl)
-    const rightPos = centerPos.clone()
-      .addScaledVector(side, curW)
-      .addScaledVector(up, st.marginDrop * scale);
+    // 3 longitudinal stations along leaf blade (Base -> Mid Lobe -> Tip)
+    const L = leafScale;
+    const W = leafScale * 0.65;
 
-    // Position pushes (Center: 0, Left: 1, Right: 2 at each station)
-    outPositions.push(centerPos.x, centerPos.y, centerPos.z);
-    outPositions.push(leftPos.x, leftPos.y, leftPos.z);
-    outPositions.push(rightPos.x, rightPos.y, rightPos.z);
+    // Station 0: Petiole base
+    const p0_c = origin.clone();
+    const p0_l = origin.clone().addScaledVector(leafSide, -W * 0.08);
+    const p0_r = origin.clone().addScaledVector(leafSide, W * 0.08);
 
-    // Normals (pointing predominantly in up direction with slight side tilt for 3D curvature)
-    const normCenter = up.clone().normalize();
-    const normLeft = up.clone().addScaledVector(side, -0.3).normalize();
-    const normRight = up.clone().addScaledVector(side, 0.3).normalize();
+    // Station 1: Mid-leaf (widest lobes with slight upward spine arch)
+    const midArch = leafScale * 0.08;
+    const p1_center = origin.clone()
+      .addScaledVector(leafFwd, L * 0.55)
+      .addScaledVector(leafUp, midArch);
+    const p1_l = p1_center.clone().addScaledVector(leafSide, -W * 0.55);
+    const p1_r = p1_center.clone().addScaledVector(leafSide, W * 0.55);
 
-    outNormals.push(normCenter.x, normCenter.y, normCenter.z);
-    outNormals.push(normLeft.x, normLeft.y, normLeft.z);
-    outNormals.push(normRight.x, normRight.y, normRight.z);
+    // Station 2: Leaf apex tip (slight downward drooping tip)
+    const p2_center = origin.clone()
+      .addScaledVector(leafFwd, L)
+      .addScaledVector(leafUp, midArch * 0.4);
+    const p2_l = p2_center.clone().addScaledVector(leafSide, -W * 0.05);
+    const p2_r = p2_center.clone().addScaledVector(leafSide, W * 0.05);
 
-    // UV coordinates
-    outUvs.push(0.5, st.frac);
-    outUvs.push(0.0, st.frac);
-    outUvs.push(1.0, st.frac);
-  }
+    const stations = [
+      { c: p0_c, l: p0_l, r: p0_r, vFrac: 0.05, col: stemCol },
+      { c: p1_center, l: p1_l, r: p1_r, vFrac: 0.55, col: leafBaseCol },
+      { c: p2_center, l: p2_l, r: p2_r, vFrac: 0.95, col: leafTipCol },
+    ];
 
-  // Indices: connect adjacent stations with quads (two triangles per side)
-  for (let i = 0; i < stations.length - 1; i++) {
-    const row1 = baseIdx + i * 3;
-    const row2 = baseIdx + (i + 1) * 3;
+    for (const st of stations) {
+      // Normals: primarily leafUp with slight side tilt for 3D curved lighting
+      const nCenter = leafUp.clone().normalize();
+      const nLeft = leafUp.clone().addScaledVector(leafSide, -0.25).normalize();
+      const nRight = leafUp.clone().addScaledVector(leafSide, 0.25).normalize();
 
-    const c1 = row1 + 0;
-    const l1 = row1 + 1;
-    const r1 = row1 + 2;
+      // Positions: Center (0), Left (1), Right (2)
+      outPositions.push(st.c.x, st.c.y, st.c.z);
+      outPositions.push(st.l.x, st.l.y, st.l.z);
+      outPositions.push(st.r.x, st.r.y, st.r.z);
 
-    const c2 = row2 + 0;
-    const l2 = row2 + 1;
-    const r2 = row2 + 2;
+      outNormals.push(nCenter.x, nCenter.y, nCenter.z);
+      outNormals.push(nLeft.x, nLeft.y, nLeft.z);
+      outNormals.push(nRight.x, nRight.y, nRight.z);
 
-    // Left wing quad: (l1, l2, c2) & (l1, c2, c1)
-    outIndices.push(l1, l2, c2);
-    outIndices.push(l1, c2, c1);
+      outUvs.push(midU, st.vFrac);
+      outUvs.push(minU, st.vFrac);
+      outUvs.push(maxU, st.vFrac);
 
-    // Right wing quad: (c1, c2, r2) & (c1, r2, r1)
-    outIndices.push(c1, c2, r2);
-    outIndices.push(c1, r2, r1);
+      outColors.push(st.col[0], st.col[1], st.col[2]);
+      outColors.push(st.col[0], st.col[1], st.col[2]);
+      outColors.push(st.col[0], st.col[1], st.col[2]);
+    }
+
+    // Connect stations with quad strips (2 triangles per side = 4 triangles per station pair)
+    for (let s = 0; s < stations.length - 1; s++) {
+      const row1 = baseIdx + s * 3;
+      const row2 = baseIdx + (s + 1) * 3;
+
+      const c1 = row1 + 0;
+      const l1 = row1 + 1;
+      const r1 = row1 + 2;
+
+      const c2 = row2 + 0;
+      const l2 = row2 + 1;
+      const r2 = row2 + 2;
+
+      // Left wing: (l1, l2, c2) & (l1, c2, c1)
+      outIndices.push(l1, l2, c2);
+      outIndices.push(l1, c2, c1);
+
+      // Right wing: (c1, c2, r2) & (c1, r2, r1)
+      outIndices.push(c1, c2, r2);
+      outIndices.push(c1, r2, r1);
+    }
   }
 }
 
 /**
  * Procedurally generates an ultra-realistic high-poly Oak Tree (Quercus robur).
- * Implements botanical recursive phototropic branching, root buttressing,
- * bark furrowing, and dual-canopy 3D curved oak foliage.
+ * Implements botanical recursive phototropic branching, flared root buttressing,
+ * organic bark furrow displacement, and dual-canopy 3D curved oak foliage sprays.
  */
 export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): BotanicalTreeResult {
   const rng = createRNG(options.seed ?? 1024);
@@ -285,22 +384,25 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   const spread = options.crownSpread ?? 5.2;
   const numScaffold = options.scaffoldBranches ?? 6;
   const radialSegments = options.radialSegments ?? 14;
-  const totalLeaves = options.leafCount ?? 3600;
-  const leafScale = options.leafScale ?? 0.28;
+  const totalLeafSprays = options.leafCount ?? 1600;
+  const leafScale = options.leafScale ?? 0.32;
 
   const barkPos: number[] = [];
   const barkNorm: number[] = [];
   const barkUv: number[] = [];
+  const barkColors: number[] = [];
   const barkIdx: number[] = [];
 
   const leavesPos1: number[] = [];
   const leavesNorm1: number[] = [];
   const leavesUv1: number[] = [];
+  const leavesColors1: number[] = [];
   const leavesIdx1: number[] = [];
 
   const leavesPos2: number[] = [];
   const leavesNorm2: number[] = [];
   const leavesUv2: number[] = [];
+  const leavesColors2: number[] = [];
   const leavesIdx2: number[] = [];
 
   const terminalTwigAnchors: Array<{
@@ -314,25 +416,27 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   // 1. ROOT BUTTRESS & TRUNK MODELING
   // ==========================================
 
-  // Generate 5 root buttress flares at the base (y: 0.0 to 1.0)
+  // Generate 5 massive flared root buttresses curving from trunk into soil
   const rootCount = 5;
   for (let r = 0; r < rootCount; r++) {
-    const rootAngle = (r / rootCount) * Math.PI * 2 + (rng() - 0.5) * 0.3;
+    const rootAngle = (r / rootCount) * Math.PI * 2 + (rng() - 0.5) * 0.25;
     const rootNodes: SplineNode[] = [];
-    const rootLen = 1.2 + rng() * 0.6;
-    const rootSteps = 5;
+    const rootLen = 1.1 + rng() * 0.5;
+    const rootSteps = 6;
 
     for (let s = 0; s <= rootSteps; s++) {
       const frac = s / rootSteps;
-      const radDist = (1.0 - frac) * rootLen + R0 * 0.8;
-      const y = (1.0 - frac) * 0.6 + frac * 0.02;
-      const x = Math.cos(rootAngle) * radDist + (rng() - 0.5) * 0.05;
-      const z = Math.sin(rootAngle) * radDist + (rng() - 0.5) * 0.05;
-      const radius = THREE.MathUtils.lerp(0.18, 0.06, frac);
+      // frac = 0 at trunk attachment (y ≈ 0.85m, rad ≈ R0)
+      // frac = 1 at ground soil entry (y = 0.0m, rad ≈ R0 + rootLen)
+      const radDist = R0 * 0.95 + Math.pow(frac, 0.8) * rootLen;
+      const y = (1.0 - Math.pow(frac, 0.7)) * 0.85;
+      const x = Math.cos(rootAngle) * radDist + (rng() - 0.5) * 0.04;
+      const z = Math.sin(rootAngle) * radDist + (rng() - 0.5) * 0.04;
+      const radius = THREE.MathUtils.lerp(0.20, 0.04, frac);
       rootNodes.push({ point: new THREE.Vector3(x, y, z), radius });
     }
 
-    loftBranch({ nodes: rootNodes, level: 0 }, 8, 0, 1.5, barkPos, barkNorm, barkUv, barkIdx);
+    loftBranch({ nodes: rootNodes, level: 0 }, 8, 0, 1.5, barkPos, barkNorm, barkUv, barkColors, barkIdx, false, true);
   }
 
   // Main Trunk (y: 0.0 to scaffold split at ~3.2m)
@@ -365,7 +469,10 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
     barkPos,
     barkNorm,
     barkUv,
-    barkIdx
+    barkColors,
+    barkIdx,
+    true, // Seal trunk base with end cap
+    false
   );
 
   const trunkApex = trunkNodes[trunkNodes.length - 1];
@@ -390,12 +497,12 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
 
     for (let s = 1; s <= limbSteps; s++) {
       const frac = s / limbSteps;
-      const stepDist = (limbLen / limbSteps);
+      const stepDist = limbLen / limbSteps;
 
       // Branch curves outwards and then upwards phototropically towards sky
       const outX = Math.cos(angle);
       const outZ = Math.sin(angle);
-      const phototropism = Math.pow(frac, 1.4) * 0.35; // turns up
+      const phototropism = Math.pow(frac, 1.4) * 0.35;
 
       curP = curP.clone().add(new THREE.Vector3(
         outX * Math.sin(pitch) * stepDist + (rng() - 0.5) * 0.08,
@@ -409,7 +516,19 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
 
     const branchObj: Branch = { nodes: limbNodes, level: 1 };
     scaffoldBranches.push(branchObj);
-    loftBranch(branchObj, Math.max(8, radialSegments - 2), trunkEndV, 1.2, barkPos, barkNorm, barkUv, barkIdx);
+    loftBranch(
+      branchObj,
+      Math.max(8, radialSegments - 2),
+      trunkEndV,
+      1.2,
+      barkPos,
+      barkNorm,
+      barkUv,
+      barkColors,
+      barkIdx,
+      false,
+      false
+    );
   }
 
   // ==========================================
@@ -427,7 +546,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         ? new THREE.Vector3().subVectors(limbNodes[parentIdx + 1].point, parentNode.point).normalize()
         : new THREE.Vector3(0, 1, 0);
 
-      // Phyllotactic golden angle fork
+      // Golden angle fork
       const forkSide = (sb % 2 === 0 ? 1 : -1);
       const forkAngle = forkSide * THREE.MathUtils.degToRad(THREE.MathUtils.lerp(35, 55, rng()));
       const secLen = THREE.MathUtils.lerp(1.5, 2.8, rng());
@@ -438,7 +557,6 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
       let secP = parentNode.point.clone();
       secNodes.push({ point: secP.clone(), radius: secBaseR });
 
-      // Orthogonal fork direction
       const ortho = new THREE.Vector3(-parentTangent.z, 0, parentTangent.x).normalize();
       if (ortho.lengthSq() < 0.001) ortho.set(1, 0, 0);
 
@@ -461,7 +579,19 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         secNodes.push({ point: secP.clone(), radius: Math.max(0.015, r) });
       }
 
-      loftBranch({ nodes: secNodes, level: 2 }, 6, trunkEndV + 10, 1.5, barkPos, barkNorm, barkUv, barkIdx);
+      loftBranch(
+        { nodes: secNodes, level: 2 },
+        6,
+        trunkEndV + 10,
+        1.5,
+        barkPos,
+        barkNorm,
+        barkUv,
+        barkColors,
+        barkIdx,
+        false,
+        false
+      );
 
       // Spawn tertiary twig sprays off secondary branch
       const twigCount = 3 + Math.floor(rng() * 3);
@@ -487,9 +617,22 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
           twNodes.push({ point: twP.clone(), radius: THREE.MathUtils.lerp(0.018, 0.008, frac) });
         }
 
-        loftBranch({ nodes: twNodes, level: 3 }, 5, trunkEndV + 20, 2.0, barkPos, barkNorm, barkUv, barkIdx);
+        // Seal terminal twig tips with end caps
+        loftBranch(
+          { nodes: twNodes, level: 3 },
+          5,
+          trunkEndV + 20,
+          2.0,
+          barkPos,
+          barkNorm,
+          barkUv,
+          barkColors,
+          barkIdx,
+          false,
+          true
+        );
 
-        // Record anchor point for leaf foliage bunches
+        // Record anchor point for leaf foliage sprays
         const tip = twNodes[twNodes.length - 1];
         const sunExposure = Math.min(1.0, (tip.point.y / H) * 0.8 + (tip.point.length() / spread) * 0.4);
         terminalTwigAnchors.push({
@@ -505,56 +648,62 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   // ==========================================
   // 4. LUSH DUAL-CANOPY OAK FOLIAGE SYNTHESIS
   // ==========================================
-  const leavesPerAnchor = Math.max(1, Math.floor(totalLeaves / Math.max(1, terminalTwigAnchors.length)));
+  const spraysPerAnchor = Math.max(1, Math.floor(totalLeafSprays / Math.max(1, terminalTwigAnchors.length)));
 
   for (const anchor of terminalTwigAnchors) {
-    for (let l = 0; l < leavesPerAnchor; l++) {
-      // Cluster leaves in organic hemispherical cloud volume around twig tip
+    for (let l = 0; l < spraysPerAnchor; l++) {
+      // Cluster leaf sprays in organic volumetric cloud around twig tip
       const offsetRadius = rng() * 0.65;
       const phi = rng() * Math.PI * 2;
       const theta = rng() * Math.PI * 0.7; // canopy bias upwards
 
-      const leafOrigin = anchor.point.clone().add(new THREE.Vector3(
+      const sprayOrigin = anchor.point.clone().add(new THREE.Vector3(
         Math.sin(theta) * Math.cos(phi) * offsetRadius,
         Math.cos(theta) * offsetRadius * 0.8,
         Math.sin(theta) * Math.sin(phi) * offsetRadius
       ));
 
       // Leaves angle outwards from tree center and upwards towards the sky
-      const outDir = new THREE.Vector3(leafOrigin.x, 0, leafOrigin.z).normalize();
-      const leafTangent = outDir.clone()
+      const outDir = new THREE.Vector3(sprayOrigin.x, 0, sprayOrigin.z).normalize();
+      const sprayDir = outDir.clone()
         .add(new THREE.Vector3(0, 0.35 + rng() * 0.4, 0))
         .add(new THREE.Vector3((rng() - 0.5) * 0.5, (rng() - 0.5) * 0.3, (rng() - 0.5) * 0.5))
         .normalize();
 
-      const leafUp = new THREE.Vector3(0, 1, 0)
+      const sprayUp = new THREE.Vector3(0, 1, 0)
         .add(new THREE.Vector3((rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.3))
         .normalize();
 
       const curLeafScale = leafScale * THREE.MathUtils.lerp(0.85, 1.25, rng());
 
       // Assign to Mature Oak Foliage (70%) or Young Sunlit Foliage (30%)
-      const isSunlitTip = anchor.sunExposure > 0.65 && rng() > 0.45;
+      const isSunlitTip = anchor.sunExposure > 0.62 && rng() > 0.40;
       if (isSunlitTip) {
-        createOakLeafGeometry(
-          leafOrigin,
-          leafTangent,
-          leafUp,
+        createOakLeafSpray(
+          sprayOrigin,
+          sprayDir,
+          sprayUp,
           curLeafScale,
+          true, // Young sunlit leaf
+          rng,
           leavesPos2,
           leavesNorm2,
           leavesUv2,
+          leavesColors2,
           leavesIdx2
         );
       } else {
-        createOakLeafGeometry(
-          leafOrigin,
-          leafTangent,
-          leafUp,
+        createOakLeafSpray(
+          sprayOrigin,
+          sprayDir,
+          sprayUp,
           curLeafScale,
+          false, // Mature oak leaf
+          rng,
           leavesPos1,
           leavesNorm1,
           leavesUv1,
+          leavesColors1,
           leavesIdx1
         );
       }
@@ -574,35 +723,40 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
     opacity: 1,
     transparent: false,
     wireframe: false,
-    texturePreset: 'bark',
+    texturePreset: 'bark_oak',
+    vertexColors: true,
   };
 
   const matureLeafMat: MaterialProperties = {
     color: options.leafColor1 ?? '#27521e',
     roughness: 0.42,
-    metalness: 0.08,
-    emissive: '#0b1e09',
-    emissiveIntensity: 0.08,
-    transmission: 0.16, // Subsurface scattering sunlight translucency
+    metalness: 0.06,
+    emissive: '#081707',
+    emissiveIntensity: 0.05,
+    transmission: 0.15,
     opacity: 1,
     transparent: false,
     wireframe: false,
-    texturePreset: 'foliage',
+    texturePreset: 'leaf_oak_mature',
     doubleSided: true,
+    vertexColors: true,
+    alphaTest: 0.5,
   };
 
   const youngLeafMat: MaterialProperties = {
     color: options.leafColor2 ?? '#46832a',
     roughness: 0.38,
-    metalness: 0.05,
-    emissive: '#11290b',
-    emissiveIntensity: 0.12,
-    transmission: 0.24, // Fresh young leaves have higher transmission
+    metalness: 0.04,
+    emissive: '#0d2208',
+    emissiveIntensity: 0.08,
+    transmission: 0.22,
     opacity: 1,
     transparent: false,
     wireframe: false,
-    texturePreset: 'foliage',
+    texturePreset: 'leaf_oak_young',
     doubleSided: true,
+    vertexColors: true,
+    alphaTest: 0.5,
   };
 
   const trunkItem: SceneItem = {
@@ -617,6 +771,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         positions: barkPos,
         normals: barkNorm,
         uvs: barkUv,
+        colors: barkColors,
         indices: barkIdx,
       },
     },
@@ -636,6 +791,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         positions: leavesPos1,
         normals: leavesNorm1,
         uvs: leavesUv1,
+        colors: leavesColors1,
         indices: leavesIdx1,
       },
     },
@@ -655,6 +811,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         positions: leavesPos2,
         normals: leavesNorm2,
         uvs: leavesUv2,
+        colors: leavesColors2,
         indices: leavesIdx2,
       },
     },

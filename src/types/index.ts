@@ -15,7 +15,16 @@ export type PrimitiveType =
   | 'capsule'
   | 'custom';
 
-export type TexturePreset = 'none' | 'checker' | 'uv_grid' | 'stripes' | 'bark' | 'foliage';
+export type TexturePreset =
+  | 'none'
+  | 'checker'
+  | 'uv_grid'
+  | 'stripes'
+  | 'bark'
+  | 'foliage'
+  | 'bark_oak'
+  | 'leaf_oak_mature'
+  | 'leaf_oak_young';
 
 export interface CustomGeometryData {
   positions: number[];
@@ -38,6 +47,7 @@ export interface MaterialProperties {
   texturePreset: TexturePreset;
   doubleSided?: boolean;
   vertexColors?: boolean;
+  alphaTest?: number;
 }
 
 export interface TransformData {

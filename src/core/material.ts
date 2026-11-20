@@ -1,158 +1,295 @@
 import * as THREE from 'three';
 import { MaterialProperties, ShadingMode, TexturePreset } from '../types';
 
-// Cache generated procedural textures to avoid redundant canvas renders
-const textureCache = new Map<TexturePreset, THREE.CanvasTexture>();
+// Cache generated procedural textures to avoid redundant renders
+const textureCache = new Map<TexturePreset, THREE.Texture>();
 
 /**
- * Procedurally generates 2D canvas textures (Checkerboard, UV Grid, Stripes)
+ * Creates pure DataTexture procedural checkerboard (256x256)
+ */
+function createCheckerTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const tileSize = 32;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const isEven = (Math.floor(x / tileSize) + Math.floor(y / tileSize)) % 2 === 0;
+      const val = isEven ? 235 : 35;
+      data[idx] = val;
+      data[idx + 1] = isEven ? 240 : 45;
+      data[idx + 2] = isEven ? 248 : 60;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates pure DataTexture procedural UV grid (256x256)
+ */
+function createUVGridTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const isBorder = x === 0 || x === width - 1 || y === 0 || y === height - 1;
+      const isGrid = x % 32 === 0 || y % 32 === 0;
+
+      if (isBorder) {
+        data[idx] = 244;
+        data[idx + 1] = 63;
+        data[idx + 2] = 94;
+      } else if (isGrid) {
+        data[idx] = 56;
+        data[idx + 1] = 189;
+        data[idx + 2] = 248;
+      } else {
+        data[idx] = 15;
+        data[idx + 1] = 23;
+        data[idx + 2] = 42;
+      }
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates pure DataTexture procedural stripes (256x256)
+ */
+function createStripesTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const stripeWidth = 32;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const isLight = Math.floor(x / stripeWidth) % 2 === 0;
+      data[idx] = isLight ? 129 : 30;
+      data[idx + 1] = isLight ? 140 : 27;
+      data[idx + 2] = isLight ? 248 : 75;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates photorealistic oak bark DataTexture (512x512)
+ * Features longitudinal furrows, deep crevice shadows, multi-frequency wood grain,
+ * and subtle lichen flecks. Works headlessly without DOM canvas.
+ */
+function createBarkDataTexture(): THREE.DataTexture {
+  const width = 512;
+  const height = 512;
+  const data = new Uint8Array(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      // Longitudinal crevice harmonics
+      const nx = (x / width) * Math.PI * 2 * 6; // 6 main vertical columns
+      const ny = (y / height) * Math.PI * 2;
+
+      const f1 = Math.sin(nx + Math.sin(ny * 2.0) * 0.4);
+      const f2 = Math.cos(nx * 2.3 + Math.cos(ny * 3.5) * 0.3) * 0.5;
+      const f3 = Math.sin(nx * 5.1 + ny * 0.5) * 0.25;
+      const microGrain = Math.sin(x * 1.8 + Math.cos(y * 0.2) * 4.0) * 0.12;
+
+      const furrow = Math.max(0, Math.min(1, 0.45 + (f1 + f2 + f3) * 0.35 + microGrain));
+
+      // Lichen / moss spots in crevices
+      const mossNoise = Math.sin(x * 0.08) * Math.cos(y * 0.06);
+      const hasMoss = mossNoise > 0.65 && furrow < 0.4;
+
+      if (hasMoss) {
+        // Subtle sage-green lichen
+        data[idx] = 68;
+        data[idx + 1] = 88;
+        data[idx + 2] = 52;
+      } else {
+        // Deep oak wood gradient from dark crevice (#1d1109) to outer bark ridge (#5c3e29)
+        data[idx] = Math.floor(25 + furrow * 68);
+        data[idx + 1] = Math.floor(16 + furrow * 46);
+        data[idx + 2] = Math.floor(10 + furrow * 30);
+      }
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 6);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates photorealistic oak leaf sprite atlas (512x512)
+ * Contains two distinct oak leaves (mature or young) with rounded lobes,
+ * central midrib rachis, lateral veins, and crisp alpha cutout channel.
+ */
+function createFoliageDataTexture(variant: 'mature' | 'young'): THREE.DataTexture {
+  const width = 512;
+  const height = 512;
+  const data = new Uint8Array(width * height * 4);
+
+  const isYoung = variant === 'young';
+
+  // Base colors
+  const baseR = isYoung ? 65 : 34;
+  const baseG = isYoung ? 132 : 78;
+  const baseB = isYoung ? 36 : 24;
+
+  const veinR = isYoung ? 102 : 62;
+  const veinG = isYoung ? 175 : 124;
+  const veinB = isYoung ? 54 : 38;
+
+  // We draw 2 oak leaves side-by-side in the texture atlas
+  const leaves = [
+    { centerU: 0.26, scaleU: 0.22, centerV: 0.5, scaleV: 0.44, lobePhase: 0.0 },
+    { centerU: 0.74, scaleU: 0.21, centerV: 0.5, scaleV: 0.43, lobePhase: 0.8 },
+  ];
+
+  for (let y = 0; y < height; y++) {
+    const v = y / height;
+
+    for (let x = 0; x < width; x++) {
+      const u = x / width;
+      const idx = (y * width + x) * 4;
+
+      let inLeaf = false;
+      let onVein = false;
+      let distToMarginFrac = 0;
+
+      for (const lf of leaves) {
+        const dv = (v - (lf.centerV - lf.scaleV)) / (lf.scaleV * 2.0); // 0 at petiole, 1 at tip
+        if (dv < 0.02 || dv > 0.98) continue;
+
+        const du = (u - lf.centerU) / lf.scaleU; // -1 to 1 across leaf width
+        const absDu = Math.abs(du);
+
+        // Oak lobe profile: 3 distinct lobes on each side
+        const lobeWave = Math.sin(dv * Math.PI * 6.0 + lf.lobePhase);
+        const profile = Math.sin(dv * Math.PI);
+        const halfWidth = profile * (0.65 + 0.32 * lobeWave);
+
+        if (absDu <= halfWidth) {
+          inLeaf = true;
+          distToMarginFrac = absDu / Math.max(0.001, halfWidth);
+
+          // Central midrib spine
+          const distToMidrib = Math.abs(du);
+          if (distToMidrib < 0.04) {
+            onVein = true;
+          }
+
+          // Lateral pinnate veins branching out toward lobe peaks (3 on each side)
+          for (let k = 1; k <= 3; k++) {
+            const lobeV = (k - 0.2) / 3.0;
+            const veinLineV = lobeV + absDu * 0.18;
+            if (Math.abs(dv - veinLineV) < 0.022) {
+              onVein = true;
+            }
+          }
+          break;
+        }
+      }
+
+      if (inLeaf) {
+        const chlorophyllGradient = 1.0 - distToMarginFrac * 0.35;
+
+        if (onVein) {
+          data[idx] = Math.min(255, Math.floor(veinR * 1.15));
+          data[idx + 1] = Math.min(255, Math.floor(veinG * 1.15));
+          data[idx + 2] = Math.min(255, Math.floor(veinB * 1.15));
+        } else {
+          // Cellular micro-variation
+          const cellNoise = Math.sin(x * 0.4) * Math.cos(y * 0.4) * 6;
+          data[idx] = Math.max(0, Math.min(255, Math.floor(baseR * chlorophyllGradient + cellNoise)));
+          data[idx + 1] = Math.max(0, Math.min(255, Math.floor(baseG * chlorophyllGradient + cellNoise)));
+          data[idx + 2] = Math.max(0, Math.min(255, Math.floor(baseB * chlorophyllGradient + cellNoise)));
+        }
+        data[idx + 3] = 255; // Fully opaque inside leaf
+      } else {
+        data[idx] = 0;
+        data[idx + 1] = 0;
+        data[idx + 2] = 0;
+        data[idx + 3] = 0; // Fully transparent outside leaf
+      }
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Procedurally generates 2D textures (Checkerboard, UV Grid, Stripes, Oak Bark, Oak Foliage)
+ * Operates purely in memory using Three.js DataTexture; works identically in browser and Node.js CLI.
  */
 export function getProceduralTexture(type: TexturePreset): THREE.Texture | null {
   if (type === 'none') return null;
-  if (typeof document === 'undefined') return null;
   if (textureCache.has(type)) return textureCache.get(type)!;
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-
+  let tex: THREE.Texture | null = null;
   switch (type) {
-    case 'checker': {
-      const tileSize = 64;
-      for (let y = 0; y < 512; y += tileSize) {
-        for (let x = 0; x < 512; x += tileSize) {
-          const isEven = (x / tileSize + y / tileSize) % 2 === 0;
-          ctx.fillStyle = isEven ? '#e2e8f0' : '#1e293b';
-          ctx.fillRect(x, y, tileSize, tileSize);
-        }
-      }
+    case 'checker':
+      tex = createCheckerTexture();
       break;
-    }
-
-    case 'uv_grid': {
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, 512, 512);
-
-      const gridSize = 32;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1;
-
-      for (let i = 0; i <= 512; i += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, 512);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(512, i);
-        ctx.stroke();
-      }
-
-      // Major grid lines & labels
-      ctx.strokeStyle = '#f43f5e';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 0, 512, 512);
-      ctx.font = 'bold 20px monospace';
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillText('U: [0..1]', 16, 36);
-      ctx.fillText('V: [0..1]', 16, 64);
+    case 'uv_grid':
+      tex = createUVGridTexture();
       break;
-    }
-
-    case 'stripes': {
-      ctx.fillStyle = '#1e1b4b';
-      ctx.fillRect(0, 0, 512, 512);
-      ctx.fillStyle = '#818cf8';
-      const stripeWidth = 32;
-      for (let x = 0; x < 512; x += stripeWidth * 2) {
-        ctx.fillRect(x, 0, stripeWidth, 512);
-      }
+    case 'stripes':
+      tex = createStripesTexture();
       break;
-    }
-
-    case 'bark': {
-      // Procedural organic oak bark texture: deep longitudinal grooves & fibers
-      ctx.fillStyle = '#3a2312';
-      ctx.fillRect(0, 0, 512, 512);
-
-      // Dark crevices and longitudinal grain
-      for (let x = 0; x < 512; x += 4) {
-        const furrowNoise = Math.sin(x * 0.12) * Math.cos(x * 0.05);
-        const colVal = Math.floor(35 + furrowNoise * 20 + Math.random() * 30);
-        const r = colVal + 20;
-        const g = Math.floor(colVal * 0.7);
-        const b = Math.floor(colVal * 0.4);
-        ctx.strokeStyle = `rgb(${r},${g},${b})`;
-        ctx.lineWidth = 2 + Math.random() * 3;
-        ctx.beginPath();
-        let curX = x;
-        ctx.moveTo(curX, 0);
-        for (let y = 0; y <= 512; y += 16) {
-          curX += (Math.random() - 0.5) * 4;
-          ctx.lineTo(curX, y);
-        }
-        ctx.stroke();
-      }
-
-      // Fine bark micro-fibers
-      for (let i = 0; i < 600; i++) {
-        const fx = Math.random() * 512;
-        const fy = Math.random() * 512;
-        const flen = 10 + Math.random() * 40;
-        ctx.strokeStyle = Math.random() > 0.5 ? 'rgba(78, 52, 34, 0.4)' : 'rgba(20, 12, 8, 0.5)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(fx, fy);
-        ctx.lineTo(fx + (Math.random() - 0.5) * 2, fy + flen);
-        ctx.stroke();
-      }
+    case 'bark':
+    case 'bark_oak':
+      tex = createBarkDataTexture();
       break;
-    }
-
-    case 'foliage': {
-      // Procedural leaf chlorophyll & venation texture
-      ctx.fillStyle = '#2d5a27';
-      ctx.fillRect(0, 0, 512, 512);
-
-      // Vein network
-      ctx.strokeStyle = '#4a8539';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(256, 512);
-      ctx.quadraticCurveTo(256, 256, 256, 0);
-      ctx.stroke();
-
-      for (let y = 60; y < 480; y += 40) {
-        ctx.lineWidth = 1.5;
-        // Right side veins
-        ctx.beginPath();
-        ctx.moveTo(256, y);
-        ctx.quadraticCurveTo(380, y - 30, 480, y - 50);
-        ctx.stroke();
-        // Left side veins
-        ctx.beginPath();
-        ctx.moveTo(256, y);
-        ctx.quadraticCurveTo(132, y - 30, 32, y - 50);
-        ctx.stroke();
-      }
+    case 'foliage':
+    case 'leaf_oak_mature':
+      tex = createFoliageDataTexture('mature');
       break;
-    }
+    case 'leaf_oak_young':
+      tex = createFoliageDataTexture('young');
+      break;
+    default:
+      return null;
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  if (type === 'bark') {
-    texture.repeat.set(1, 4);
-  } else {
-    texture.repeat.set(2, 2);
+  if (tex) {
+    textureCache.set(type, tex);
   }
-  texture.needsUpdate = true;
-  textureCache.set(type, texture);
-  return texture;
+  return tex;
 }
 
 /**
@@ -191,6 +328,8 @@ export function createMaterial(
     case 'rendered':
     default: {
       const texture = getProceduralTexture(props.texturePreset);
+      const alphaTest = typeof props.alphaTest === 'number' ? props.alphaTest : 0;
+      const isTransparent = props.transparent || (alphaTest === 0 && (props.transmission > 0 || props.opacity < 1.0));
       const mat = new THREE.MeshPhysicalMaterial({
         color: new THREE.Color(props.color),
         roughness: props.roughness,
@@ -199,9 +338,11 @@ export function createMaterial(
         emissiveIntensity: props.emissiveIntensity,
         transmission: props.transmission,
         opacity: props.opacity,
-        transparent: props.transparent || props.transmission > 0 || props.opacity < 1.0,
+        transparent: isTransparent,
         wireframe: props.wireframe,
         map: texture,
+        alphaTest: alphaTest,
+        depthWrite: true,
         clearcoat: 0.1,
         clearcoatRoughness: 0.1,
         ior: 1.5,
@@ -232,9 +373,14 @@ export function updateMaterial(
     material.emissiveIntensity = props.emissiveIntensity;
     material.transmission = props.transmission;
     material.opacity = props.opacity;
-    material.transparent = props.transparent || props.transmission > 0 || props.opacity < 1.0;
+    const alphaTest = typeof props.alphaTest === 'number' ? props.alphaTest : 0;
+    material.transparent = props.transparent || (alphaTest === 0 && (props.transmission > 0 || props.opacity < 1.0));
     material.wireframe = props.wireframe;
     material.map = getProceduralTexture(props.texturePreset);
+    if (typeof props.alphaTest === 'number') {
+      material.alphaTest = props.alphaTest;
+    }
+    material.depthWrite = true;
     material.needsUpdate = true;
   } else if (material instanceof THREE.MeshStandardMaterial) {
     material.color.set(props.color);

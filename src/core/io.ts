@@ -88,7 +88,7 @@ export function exportSceneToSTLString(items: SceneItem[]): string {
   return typeof res === 'string' ? res : new TextDecoder().decode(res.buffer);
 }
 
-// Polyfill FileReader for headless Node.js environments when running GLTFExporter
+// Polyfill FileReader, ImageData, and headless Canvas for Node.js CLI/server environments
 if (typeof globalThis !== 'undefined' && typeof (globalThis as any).FileReader === 'undefined') {
   class HeadlessFileReader {
     public result: ArrayBuffer | null = null;
@@ -105,6 +105,141 @@ if (typeof globalThis !== 'undefined' && typeof (globalThis as any).FileReader =
     }
   }
   (globalThis as any).FileReader = HeadlessFileReader;
+}
+
+if (typeof globalThis !== 'undefined' && typeof (globalThis as any).ImageData === 'undefined') {
+  class HeadlessImageData {
+    public data: Uint8ClampedArray;
+    public width: number;
+    public height: number;
+    constructor(data: Uint8ClampedArray, width: number, height: number) {
+      this.data = data;
+      this.width = width;
+      this.height = height;
+    }
+  }
+  (globalThis as any).ImageData = HeadlessImageData;
+}
+
+/**
+ * Pure Node.js RGBA to PNG encoder using built-in zlib for headless GLTF export with textures
+ */
+function encodeRGBAToPNG(width: number, height: number, rgba: Uint8Array | Uint8ClampedArray): Uint8Array {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const zlib = typeof window === 'undefined' ? require('zlib') : null;
+    if (!zlib) return new Uint8Array(0);
+
+    const stride = width * 4;
+    const raw = Buffer.alloc((stride + 1) * height);
+    const buf = Buffer.from(rgba.buffer, rgba.byteOffset, rgba.byteLength);
+
+    for (let y = 0; y < height; y++) {
+      raw[y * (stride + 1)] = 0; // Filter: None
+      buf.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
+    }
+
+    const deflated = zlib.deflateSync(raw);
+
+    const chunk = (type: string, data: Buffer) => {
+      const len = Buffer.alloc(4);
+      len.writeUInt32BE(data.length, 0);
+      const t = Buffer.from(type, 'ascii');
+      const crc = Buffer.alloc(4);
+      const crcVal = zlib.crc32(Buffer.concat([t, data]));
+      crc.writeUInt32BE(crcVal >>> 0, 0);
+      return Buffer.concat([len, t, data, crc]);
+    };
+
+    const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(width, 0);
+    ihdr.writeUInt32BE(height, 4);
+    ihdr[8] = 8;
+    ihdr[9] = 6; // RGBA
+    ihdr[10] = 0;
+    ihdr[11] = 0;
+    ihdr[12] = 0;
+
+    return Buffer.concat([
+      sig,
+      chunk('IHDR', ihdr),
+      chunk('IDAT', deflated),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+  } catch {
+    return new Uint8Array(0);
+  }
+}
+
+if (typeof globalThis !== 'undefined' && typeof (globalThis as any).document === 'undefined') {
+  (globalThis as any).document = {
+    createElement(tag: string) {
+      if (tag === 'canvas') {
+        const canvasObj = {
+          width: 0,
+          height: 0,
+          _imageData: null as any,
+          getContext() {
+            return {
+              translate() {},
+              scale() {},
+              putImageData(id: any) {
+                canvasObj._imageData = id;
+              },
+              drawImage() {},
+              fillRect() {},
+              clearRect() {},
+              strokeRect() {},
+              beginPath() {},
+              moveTo() {},
+              lineTo() {},
+              stroke() {},
+              fill() {},
+              quadraticCurveTo() {},
+              bezierCurveTo() {},
+              arc() {},
+              rect() {},
+              save() {},
+              restore() {},
+              fillText() {},
+              measureText() {
+                return { width: 0 };
+              },
+              createLinearGradient() {
+                return { addColorStop() {} };
+              },
+              createRadialGradient() {
+                return { addColorStop() {} };
+              },
+              fillStyle: '#000000',
+              strokeStyle: '#000000',
+              lineWidth: 1,
+              font: '10px sans-serif',
+            };
+          },
+          toBlob(callback: (blob: Blob) => void, _type?: string) {
+            if (canvasObj._imageData && canvasObj.width > 0 && canvasObj.height > 0) {
+              const pngBuf = encodeRGBAToPNG(canvasObj.width, canvasObj.height, canvasObj._imageData.data);
+              const blob = new Blob([pngBuf as unknown as BlobPart], { type: 'image/png' });
+              callback(blob);
+            } else {
+              callback(new Blob([], { type: 'image/png' }));
+            }
+          },
+          toDataURL() {
+            if (canvasObj._imageData && canvasObj.width > 0 && canvasObj.height > 0) {
+              const pngBuf = encodeRGBAToPNG(canvasObj.width, canvasObj.height, canvasObj._imageData.data);
+              return `data:image/png;base64,${Buffer.from(pngBuf).toString('base64')}`;
+            }
+            return 'data:image/png;base64,';
+          },
+        };
+        return canvasObj;
+      }
+      return {};
+    },
+  };
 }
 
 /**
