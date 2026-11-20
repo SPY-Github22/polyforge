@@ -4,6 +4,8 @@ import {
   insertOrUpdateKeyframe,
   removeKeyframeAt,
   createTurntableTrack,
+  generateClosedCircuitTrajectory,
+  evaluateMultiTrackAtFrame,
 } from '../src/core/animation';
 import { AnimationTrack, TransformData } from '../src/types';
 
@@ -172,5 +174,73 @@ describe('Keyframe Animation Engine', () => {
 
     const at60 = evaluateTrackAtFrame(turntable, 60, fallbackTransform);
     expect(at60.rotation[1]).toBeCloseTo(Math.PI * 2); // 360 degrees
+  });
+
+  it('generates an exact closed-circuit trajectory that returns seamlessly to origin and initial heading', () => {
+    const trajectory = generateClosedCircuitTrajectory({
+      totalFrames: 360,
+      fps: 30,
+      turnRadius: 2.5,
+      wheelRadius: 0.34,
+      gearRatio: 2.4,
+      integerRevolutions: true,
+    });
+
+    expect(trajectory.length).toBe(361);
+
+    const start = trajectory[0];
+    const end = trajectory[360];
+
+    // Starts at origin
+    expect(start.position[0]).toBeCloseTo(0, 2);
+    expect(start.position[2]).toBeCloseTo(0, 2);
+    expect(start.heading).toBeCloseTo(0, 2);
+
+    // Returns seamlessly to origin
+    expect(end.position[0]).toBeCloseTo(0, 2);
+    expect(end.position[2]).toBeCloseTo(0, 2);
+    // Heading should be 0 mod 2*pi
+    expect(Math.abs(end.heading % (Math.PI * 2))).toBeCloseTo(0, 2);
+
+    // Integer revolutions for wheels and cranks
+    const wheelRotMod = Math.abs(end.wheelRotation % (Math.PI * 2));
+    expect(wheelRotMod).toBeCloseTo(0, 1);
+
+    const crankRotMod = Math.abs(end.crankRotation % (Math.PI * 2));
+    expect(crankRotMod).toBeCloseTo(0, 1);
+
+    // Mid-turn (around frame 120 or 130), bike must have positive curvature, inward lean and steering
+    const midTurn = trajectory[130];
+    expect(midTurn.curvature).toBeGreaterThan(0);
+    expect(midTurn.leanAngle).toBeGreaterThan(0);
+    expect(midTurn.steeringAngle).toBeGreaterThan(0);
+
+    // Straightaway (frame 30) must have 0 curvature, 0 lean and 0 steering
+    const straight = trajectory[30];
+    expect(straight.curvature).toBeCloseTo(0, 3);
+    expect(straight.leanAngle).toBeCloseTo(0, 3);
+    expect(straight.steeringAngle).toBeCloseTo(0, 3);
+  });
+
+  it('evaluates multi-track animations across several objects simultaneously', () => {
+    const trackA: AnimationTrack = {
+      objectId: 'obj-a',
+      keyframes: [
+        { frame: 0, transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+        { frame: 100, transform: { position: [10, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+      ],
+    };
+    const trackB: AnimationTrack = {
+      objectId: 'obj-b',
+      keyframes: [
+        { frame: 0, transform: { position: [0, 5, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+        { frame: 100, transform: { position: [0, 15, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+      ],
+    };
+
+    const evaluated = evaluateMultiTrackAtFrame([trackA, trackB], 50);
+    expect(evaluated.size).toBe(2);
+    expect(evaluated.get('obj-a')?.position[0]).toBeCloseTo(5);
+    expect(evaluated.get('obj-b')?.position[1]).toBeCloseTo(10);
   });
 });

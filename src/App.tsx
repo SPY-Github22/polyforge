@@ -25,7 +25,9 @@ import {
   exportToSTL,
   exportProjectFile,
   parseProjectFile,
+  convertPolyforgeTracksToAnimationClip,
 } from './core/io';
+import { generateAnimatedBicycleCircuit } from './core/bicycle';
 import { history } from './core/history';
 import { TopNavbar } from './components/TopNavbar';
 import { LeftToolbar } from './components/LeftToolbar';
@@ -515,8 +517,24 @@ export const App: React.FC = () => {
 
   const handleExportGLTF = (binary: boolean) => {
     if (engineRef.current) {
-      exportToGLTF(engineRef.current.getUserMeshGroup(), binary, 'polyforge-model');
+      const clip = tracks.length > 0 ? convertPolyforgeTracksToAnimationClip(sceneItems, tracks, timelineState.fps) : null;
+      const animations = clip ? [clip] : undefined;
+      exportToGLTF(engineRef.current.getUserMeshGroup(), binary, 'polyforge-model', animations);
     }
+  };
+
+  const handleAddAnimatedBicycle = () => {
+    const circuit = generateAnimatedBicycleCircuit({ totalFrames: 360, fps: 30 });
+    setSceneItems((prev) => [...prev, ...circuit.items]);
+    setTracks((prev) => [...prev, ...circuit.tracks]);
+    setTimelineState((prev) => ({
+      ...prev,
+      currentFrame: 0,
+      totalFrames: 360,
+      fps: 30,
+      isPlaying: true,
+      isLooping: true,
+    }));
   };
 
   const handleExportOBJ = () => {
@@ -722,6 +740,7 @@ export const App: React.FC = () => {
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         isAIOpen={isAIOpen}
         onToggleAI={() => setIsAIOpen((prev) => !prev)}
+        onAddAnimatedBicycle={handleAddAnimatedBicycle}
       />
 
       {/* Main Workspace Row: Toolbar + Viewport + Inspector */}

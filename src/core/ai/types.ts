@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { BotanicalTreeOptions } from '../botany';
 import { BicycleOptions } from '../bicycle';
+import { ClosedCircuitOptions } from '../animation';
 
 export type ProceduralTemplateId =
   | 'sci-fi-citadel'
@@ -64,6 +65,7 @@ export interface PolyForgeScriptAPI {
   createObject: (options: CreateObjectOptions) => SceneItem;
   createTree: (options?: BotanicalTreeOptions) => SceneItem[];
   createBicycle: (options?: BicycleOptions) => SceneItem[];
+  createAnimatedBicycle: (options?: BicycleOptions & ClosedCircuitOptions) => { items: SceneItem[]; tracks: AnimationTrack[] };
   createCustomMesh: (options: {
     name?: string;
     positions: number[];

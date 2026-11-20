@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
+  Activity,
   Box,
   Download,
   FolderOpen,
@@ -40,6 +41,7 @@ interface TopNavbarProps {
   onOpenShortcuts: () => void;
   isAIOpen: boolean;
   onToggleAI: () => void;
+  onAddAnimatedBicycle?: () => void;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -64,6 +66,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onOpenShortcuts,
   isAIOpen,
   onToggleAI,
+  onAddAnimatedBicycle,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -317,6 +320,24 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     {type}
                   </button>
                 ))}
+                {onAddAnimatedBicycle && (
+                  <>
+                    <div className="my-1 border-t border-studio-800" />
+                    <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                      Mechanical Simulation
+                    </div>
+                    <button
+                      onClick={() => {
+                        onAddAnimatedBicycle();
+                        setActiveMenu(null);
+                      }}
+                      className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center gap-2 text-emerald-400 font-medium"
+                    >
+                      <Activity size={12} className="text-emerald-400" />
+                      Animated Bicycle Circuit
+                    </button>
+                  </>
+                )}
               </div>
             )}
             {/* AI Assistant Menu */}

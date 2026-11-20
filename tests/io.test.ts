@@ -178,4 +178,45 @@ describe('Project IO and Serialization', () => {
     expect(result).toBeInstanceOf(ArrayBuffer);
     expect((result as ArrayBuffer).byteLength).toBeGreaterThan(100);
   });
+
+  it('exports SceneItem array with embedded AnimationTracks to binary GLB headlessly', async () => {
+    const testItems: SceneItem[] = [
+      {
+        id: 'box-1',
+        name: 'Animated Box',
+        type: 'mesh',
+        primitiveType: 'box',
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        material: {
+          color: '#388bfd',
+          roughness: 0.35,
+          metalness: 0.2,
+          emissive: '#000000',
+          emissiveIntensity: 0,
+          transmission: 0,
+          opacity: 1,
+          transparent: false,
+          wireframe: false,
+          texturePreset: 'none',
+        },
+        visible: true,
+        locked: false,
+      },
+    ];
+
+    const testTracks: AnimationTrack[] = [
+      {
+        objectId: 'box-1',
+        keyframes: [
+          { frame: 0, transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+          { frame: 30, transform: { position: [5, 2, 0], rotation: [0, Math.PI, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+          { frame: 60, transform: { position: [0, 0, 0], rotation: [0, Math.PI * 2, 0], scale: [1, 1, 1] }, interpolation: 'linear' },
+        ],
+      },
+    ];
+
+    const result = await exportSceneToGLTFBuffer(testItems, true, testTracks, 30);
+    expect(result).toBeInstanceOf(ArrayBuffer);
+    expect((result as ArrayBuffer).byteLength).toBeGreaterThan(500);
+  });
 });

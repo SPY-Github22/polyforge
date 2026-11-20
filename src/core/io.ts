@@ -243,13 +243,94 @@ if (typeof globalThis !== 'undefined' && typeof (globalThis as any).document ===
 }
 
 /**
+ * Converts PolyForge AnimationTrack[] into a Three.js AnimationClip suitable for GLTFExporter.
+ */
+export function convertPolyforgeTracksToAnimationClip(
+  items: SceneItem[],
+  tracks: AnimationTrack[],
+  fps: number = 30,
+  clipName: string = 'PolyForgeAnimation'
+): THREE.AnimationClip | null {
+  if (!tracks || tracks.length === 0) return null;
+
+  const itemMap = new Map<string, SceneItem>();
+  for (const item of items) {
+    itemMap.set(item.id, item);
+  }
+
+  const kfTracks: THREE.KeyframeTrack[] = [];
+  let maxTime = 0;
+
+  for (const track of tracks) {
+    const item = itemMap.get(track.objectId);
+    if (!item || !track.keyframes || track.keyframes.length === 0) continue;
+
+    const targetNodeName = item.name;
+    const times: number[] = [];
+    const posValues: number[] = [];
+    const quatValues: number[] = [];
+    const scaleValues: number[] = [];
+
+    const sorted = [...track.keyframes].sort((a, b) => a.frame - b.frame);
+
+    for (const kf of sorted) {
+      const t = kf.frame / fps;
+      times.push(t);
+      if (t > maxTime) maxTime = t;
+
+      posValues.push(
+        kf.transform.position[0],
+        kf.transform.position[1],
+        kf.transform.position[2]
+      );
+
+      const euler = new THREE.Euler(
+        kf.transform.rotation[0],
+        kf.transform.rotation[1],
+        kf.transform.rotation[2],
+        'YXZ'
+      );
+      const quat = new THREE.Quaternion().setFromEuler(euler);
+      quatValues.push(quat.x, quat.y, quat.z, quat.w);
+
+      scaleValues.push(
+        kf.transform.scale[0],
+        kf.transform.scale[1],
+        kf.transform.scale[2]
+      );
+    }
+
+    if (times.length > 0) {
+      kfTracks.push(new THREE.VectorKeyframeTrack(`${targetNodeName}.position`, times, posValues));
+      kfTracks.push(new THREE.QuaternionKeyframeTrack(`${targetNodeName}.quaternion`, times, quatValues));
+      kfTracks.push(new THREE.VectorKeyframeTrack(`${targetNodeName}.scale`, times, scaleValues));
+    }
+  }
+
+  if (kfTracks.length === 0) return null;
+  return new THREE.AnimationClip(clipName, maxTime, kfTracks);
+}
+
+/**
  * Headless export: converts SceneItem[] directly to a GLTF/GLB ArrayBuffer.
  * Works headlessly in Node.js or browser without DOM requirement.
+ * If animation tracks are supplied, bundles embedded animations into the glTF/GLB.
  */
-export function exportSceneToGLTFBuffer(items: SceneItem[], binary: boolean = true): Promise<ArrayBuffer | object> {
+export function exportSceneToGLTFBuffer(
+  items: SceneItem[],
+  binary: boolean = true,
+  tracks?: AnimationTrack[],
+  fps: number = 30
+): Promise<ArrayBuffer | object> {
   return new Promise((resolve, reject) => {
     const group = buildThreeGroupFromItems(items);
     const exporter = new GLTFExporter();
+    const clip = tracks && tracks.length > 0 ? convertPolyforgeTracksToAnimationClip(items, tracks, fps) : null;
+    const exportOptions: any = { binary, embedImages: true };
+    if (clip) {
+      exportOptions.animations = [clip];
+    }
+
     exporter.parse(
       group,
       (result) => {
@@ -258,7 +339,7 @@ export function exportSceneToGLTFBuffer(items: SceneItem[], binary: boolean = tr
       (error) => {
         reject(error);
       },
-      { binary, embedImages: true }
+      exportOptions
     );
   });
 }
@@ -291,10 +372,15 @@ export function downloadText(content: string, filename: string, mimeType: string
 export function exportToGLTF(
   root: THREE.Object3D,
   binary: boolean = true,
-  filename: string = 'polyforge-export'
+  filename: string = 'polyforge-export',
+  animations?: THREE.AnimationClip[]
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const exporter = new GLTFExporter();
+    const exportOptions: any = { binary, embedImages: true };
+    if (animations && animations.length > 0) {
+      exportOptions.animations = animations;
+    }
     exporter.parse(
       root,
       (result) => {
@@ -311,7 +397,7 @@ export function exportToGLTF(
         console.error('An error occurred during GLTF export:', error);
         reject(error);
       },
-      { binary, embedImages: true }
+      exportOptions
     );
   });
 }

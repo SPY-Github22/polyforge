@@ -212,6 +212,24 @@ describe('AI Scripting Engine & API', () => {
     expect(res.items[0].name).toContain('Diamond Road Frame');
   });
 
+  it('generates animated bicycle circuit directly via polyforge.createAnimatedBicycle()', async () => {
+    const ctx = createTestContext();
+    const script = `
+      polyforge.clearScene();
+      const result = polyforge.createAnimatedBicycle({
+        frameColor: '#2563eb',
+        totalFrames: 180,
+      });
+      polyforge.log('Animated bike parts: ' + result.items.length + ', tracks: ' + result.tracks.length);
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBe(7);
+    expect(res.tracks.length).toBe(7);
+    expect(res.logs.some((l) => l.includes('Animated bike parts: 7, tracks: 7'))).toBe(true);
+  });
+
   it('captures standard console.log output into execution logs', async () => {
     const ctx = createTestContext();
     const script = `

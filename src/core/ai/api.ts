@@ -15,10 +15,10 @@ import {
   ProceduralTemplateId,
   UpdateObjectOptions,
 } from './types';
-import { insertOrUpdateKeyframe } from '../animation';
+import { insertOrUpdateKeyframe, ClosedCircuitOptions } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
 import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
-import { BicycleOptions, generateRealisticBicycle } from '../bicycle';
+import { BicycleOptions, generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../bicycle';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -118,6 +118,19 @@ export function createPolyForgeScriptAPI(
       }
       logs.push(`[Mechanical] Generated realistic bicycle: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris across ${result.allItems.length} sub-assemblies.`);
       return result.allItems;
+    },
+
+    createAnimatedBicycle: (options?: BicycleOptions & ClosedCircuitOptions): { items: SceneItem[]; tracks: AnimationTrack[] } => {
+      const circuit = generateAnimatedBicycleCircuit(options);
+      for (const item of circuit.items) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      for (const track of circuit.tracks) {
+        context.tracks.push(track);
+      }
+      logs.push(`[Mechanical] Generated animated bicycle circuit: ${circuit.items.length} sub-assemblies, ${circuit.tracks.length} tracks, ${circuit.totalFrames} frames.`);
+      return { items: circuit.items, tracks: circuit.tracks };
     },
 
     createCustomMesh: (options: {

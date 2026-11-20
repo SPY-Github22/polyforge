@@ -151,11 +151,13 @@ npm run polyforge-mcp
 
 ### 2. 🎬 Keyframe Animation & Timeline Engine
 - **Non-Linear Scrubber**: Full timeline scrubber with custom frame count (e.g. 60–1200 frames) and configurable framerates (24, 30, 60 FPS).
+- **Kinematic Multitrack & Vehicle Solvers**: Procedural closed-circuit racetrack trajectory evaluation, ground rolling wheel rotation without slip ($\omega = v/r$), cadence-synchronized crankset and chainring rotation, gravity-counterbalanced level pedals, centripetal roll lean dynamics ($\theta \approx \arctan(v^2/(g \cdot R))$), handlebar steering kinematics, pedaling cadence sway wobble, and road micro-vibration.
+- **Embedded glTF 2.0 Animation Exporter**: Headless binary `.glb` compilation with complete embedded `THREE.AnimationClip` animations and multi-channel keyframe tracks compatible with Blender, Three.js, and web 3D viewers.
 - **Interpolation Curves**:
   - Linear interpolation (`lerp`)
   - Smoothstep cubic ease-in-out (`smoothstep`)
   - Hold / Step interpolation (`step`)
-  - Quaternion spherical slerp (`slerp`) for rotation without gimbal lock.
+  - Continuous Euler revolution tracking and quaternion orientation without gimbal lock.
 - **Auto-Keying**: Automatically captures keyframes on the timeline when manipulating objects.
 - **360° Turntable Generator**: One-click procedural turntable rotation sequence generator.
 

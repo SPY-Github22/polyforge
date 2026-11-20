@@ -8,7 +8,7 @@ import { exportSceneToOBJString, exportSceneToSTLString, exportSceneToGLTFBuffer
 import { PolyForgeMCPServer } from './polyforge-mcp';
 import { EnvironmentSettings, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
-import { generateRealisticBicycle } from '../src/core/bicycle';
+import { generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../src/core/bicycle';
 
 const defaultEnv: EnvironmentSettings = {
   backgroundColor: '#0d1117',
@@ -72,6 +72,10 @@ async function main() {
       return args[idx + 1];
     }
     return null;
+  };
+
+  const hasFlag = (flag: string, alias?: string): boolean => {
+    return args.some((a) => a === flag || (alias && a === alias));
   };
 
   switch (command) {
@@ -186,6 +190,55 @@ async function main() {
       const spokeCount = parseInt(getArgValue('--spokes') || '32', 10);
       const wheelSizeVal = getArgValue('--wheelsize');
       const wheelSize = wheelSizeVal ? parseFloat(wheelSizeVal) : undefined;
+      const isAnimated = hasFlag('--animate') || hasFlag('--circuit');
+
+      if (isAnimated) {
+        console.log('[PolyForge Agent] Generating kinematically animated closed-circuit bicycle...');
+        const circuit = generateAnimatedBicycleCircuit({
+          frameColor,
+          frameMaterial,
+          handlebarStyle,
+          pedalStyle,
+          wheelSize,
+          spokeCount,
+          totalFrames: 360,
+          fps: 30,
+        });
+
+        console.log(`[PolyForge Agent] Animated bicycle generated: ${circuit.items.length} sub-assemblies, ${circuit.tracks.length} tracks, ${circuit.totalFrames} frames.`);
+        const fmt = (getArgValue('--format', '-f') || 'json').toLowerCase();
+        const defaultName = `animated-bicycle.${fmt === 'json' ? 'json' : fmt}`;
+        const outPath = getArgValue('--out', '-o') || path.resolve(process.cwd(), defaultName);
+
+        if (fmt === 'glb') {
+          const glbBuffer = await exportSceneToGLTFBuffer(circuit.items, true, circuit.tracks, circuit.fps);
+          fs.writeFileSync(outPath, Buffer.from(glbBuffer as ArrayBuffer));
+          console.log(`[PolyForge Agent] Exported animated bicycle GLB (${(glbBuffer as ArrayBuffer).byteLength} bytes) to: ${outPath}`);
+        } else {
+          const outputData = {
+            version: '1.0.0',
+            generator: 'PolyForge Mechanical Kinematic Engine (Animated Bicycle)',
+            createdAt: new Date().toISOString(),
+            environment: {
+              ...defaultEnv,
+              preset: 'studio' as const,
+            },
+            items: circuit.items,
+            tracks: circuit.tracks,
+            timeline: {
+              currentFrame: 0,
+              totalFrames: circuit.totalFrames,
+              fps: circuit.fps,
+              isPlaying: true,
+              isLooping: true,
+              autoKeying: false,
+            },
+          };
+          fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
+          console.log(`[PolyForge Agent] Saved animated bicycle project JSON to: ${outPath}`);
+        }
+        break;
+      }
 
       const bike = generateRealisticBicycle({
         frameColor,

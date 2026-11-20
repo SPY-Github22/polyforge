@@ -7,7 +7,7 @@ import { exportSceneToOBJString, exportSceneToSTLString, parseProjectFile } from
 import { ProceduralTemplateId } from '../src/core/ai/types';
 import { AnimationTrack, EnvironmentSettings, SceneItem, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
-import { generateRealisticBicycle } from '../src/core/bicycle';
+import { generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../src/core/bicycle';
 
 export interface MCPServerState {
   items: SceneItem[];
@@ -213,6 +213,7 @@ export const MCP_TOOLS = [
         includeCables: { type: 'boolean', description: 'Include routed control cables (default true)' },
         includeDiscBrakes: { type: 'boolean', description: 'Include 160mm vented disc rotors and calipers (default true)' },
         includeReflectors: { type: 'boolean', description: 'Include amber safety reflectors (default true)' },
+        animated: { type: 'boolean', description: 'Whether to synthesize a synchronized closed-circuit animation with pedaling, rolling wheels, inward lean, and steering' },
         clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
       },
     },
@@ -569,6 +570,35 @@ export class PolyForgeMCPServer {
         if (args.clearScene !== false) {
           this.state.items = [];
           this.state.tracks = [];
+        }
+
+        if (args.animated) {
+          const circuit = generateAnimatedBicycleCircuit({
+            frameColor: args.frameColor,
+            frameMaterial: args.frameMaterial,
+            handlebarStyle: args.handlebarStyle,
+            pedalStyle: args.pedalStyle,
+            wheelSize: args.wheelSize,
+            spokeCount: args.spokeCount,
+            includeCables: args.includeCables,
+            includeDiscBrakes: args.includeDiscBrakes,
+            includeReflectors: args.includeReflectors,
+            totalFrames: 360,
+            fps: 30,
+          });
+
+          this.state.items.push(...circuit.items);
+          this.state.tracks.push(...circuit.tracks);
+          this.state.timeline.totalFrames = circuit.totalFrames;
+          this.state.timeline.isPlaying = true;
+
+          return {
+            message: 'Successfully synthesized animated closed-circuit bicycle with pedaling, rolling wheels, inward lean, and steering.',
+            stats: circuit.modularBicycle.stats,
+            componentsCount: circuit.items.length,
+            tracksCount: circuit.tracks.length,
+            totalFrames: circuit.totalFrames,
+          };
         }
 
         const bike = generateRealisticBicycle({

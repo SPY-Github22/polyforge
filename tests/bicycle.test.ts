@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { generateRealisticBicycle } from '../src/core/bicycle';
+import {
+  generateRealisticBicycle,
+  generateModularBicycle,
+  generateAnimatedBicycleCircuit,
+} from '../src/core/bicycle';
 import { createPrimitiveGeometry, calculateGeometryStats } from '../src/core/geometry';
 import { exportSceneToOBJString, exportSceneToSTLString, exportSceneToGLTFBuffer } from '../src/core/io';
 
@@ -208,5 +212,114 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
         expect(idx).toBeLessThan(numVerts);
       }
     }
+  });
+
+  it('generates a modular bicycle with 7 articulatable assemblies and localized pivots', () => {
+    const modular = generateModularBicycle();
+
+    expect(modular.frameItem).toBeDefined();
+    expect(modular.cockpitItem).toBeDefined();
+    expect(modular.frontWheelItem).toBeDefined();
+    expect(modular.rearWheelItem).toBeDefined();
+    expect(modular.cranksetItem).toBeDefined();
+    expect(modular.leftPedalItem).toBeDefined();
+    expect(modular.rightPedalItem).toBeDefined();
+    expect(modular.allItems.length).toBe(7);
+
+    expect(modular.stats.totalTriangles).toBeGreaterThan(4000);
+    expect(modular.stats.totalVertices).toBeGreaterThan(4000);
+
+    // Initial positions match ISO bicycle proportions
+    expect(modular.frontWheelItem.transform.position[0]).toBeGreaterThan(0.5); // front axle X ~ 0.57
+    expect(modular.rearWheelItem.transform.position[0]).toBeLessThan(-0.4);   // rear axle X ~ -0.43
+    expect(modular.cranksetItem.transform.position[0]).toBeCloseTo(0.0, 2);   // BB center X ~ 0.0
+
+    // Right and Left pedals are on opposite sides
+    expect(modular.rightPedalItem.transform.position[2]).toBeGreaterThan(0.05);
+    expect(modular.leftPedalItem.transform.position[2]).toBeLessThan(-0.05);
+  });
+
+  it('synthesizes a synchronized kinematic closed-circuit animation with pedaling, steering, and banking', () => {
+    const circuit = generateAnimatedBicycleCircuit({
+      totalFrames: 360,
+      fps: 30,
+      turnRadius: 2.5,
+      wheelRadius: 0.34,
+      gearRatio: 2.4,
+    });
+
+    expect(circuit.items.length).toBe(7);
+    expect(circuit.tracks.length).toBe(7);
+    expect(circuit.totalFrames).toBe(360);
+    expect(circuit.trajectory.length).toBe(361);
+
+    const frameTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.frameItem.id)!;
+    const frontWheelTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.frontWheelItem.id)!;
+    const rearWheelTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.rearWheelItem.id)!;
+    const cranksetTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.cranksetItem.id)!;
+    const cockpitTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.cockpitItem.id)!;
+    const rightPedalTrack = circuit.tracks.find((t) => t.objectId === circuit.modularBicycle.rightPedalItem.id)!;
+
+    expect(frameTrack.keyframes.length).toBe(361);
+    expect(frontWheelTrack.keyframes.length).toBe(361);
+    expect(cranksetTrack.keyframes.length).toBe(361);
+
+    // 1. Closed Circuit: Frame starts and returns to origin
+    const f0 = frameTrack.keyframes[0].transform;
+    const fEnd = frameTrack.keyframes[360].transform;
+    expect(f0.position[0]).toBeCloseTo(0, 1);
+    expect(f0.position[2]).toBeCloseTo(0, 1);
+    expect(fEnd.position[0]).toBeCloseTo(0, 1);
+    expect(fEnd.position[2]).toBeCloseTo(0, 1);
+
+    // 2. Wheel rolling: Wheels spin along axle synchronized to ground distance
+    const wheelEnd = rearWheelTrack.keyframes[360].transform;
+    // Total wheel rotation is multiple of 2*pi
+    expect(Math.abs(wheelEnd.rotation[2] % (Math.PI * 2))).toBeCloseTo(0, 1);
+    expect(wheelEnd.rotation[2]).toBeLessThan(-10); // Spun forward several revolutions
+
+    // 3. Crank rotation: Cranks rotate with cadence
+    const crankEnd = cranksetTrack.keyframes[360].transform;
+    expect(Math.abs(crankEnd.rotation[2] % (Math.PI * 2))).toBeCloseTo(0, 1);
+    expect(crankEnd.rotation[2]).toBeLessThan(-5); // Spun forward
+
+    // 4. Pedals stay level under gravity (rotation around Z is zero, does not spin with crank)
+    for (let k = 0; k <= 360; k += 30) {
+      const pedalRot = rightPedalTrack.keyframes[k].transform.rotation;
+      expect(pedalRot[2]).toBe(0); // Z rotation is 0 (level under gravity)
+    }
+
+    // 5. Steering & Banking: Front cockpit steers into arc and frame banks during turn
+    const turnKeyframe = cockpitTrack.keyframes[120].transform;
+    const frameTurnKeyframe = frameTrack.keyframes[120].transform;
+    expect(turnKeyframe.rotation[1]).not.toBe(0); // Cockpit is steered
+    expect(frameTurnKeyframe.rotation[0]).toBeGreaterThan(0); // Leaning inward
+  });
+
+  it('exports animated bicycle scene to valid binary GLB buffer with embedded channels', async () => {
+    const circuit = generateAnimatedBicycleCircuit({
+      totalFrames: 60,
+      fps: 30,
+    });
+
+    const glbBuffer = await exportSceneToGLTFBuffer(circuit.items, true, circuit.tracks, 30);
+    expect(glbBuffer).toBeInstanceOf(ArrayBuffer);
+    const buf = Buffer.from(glbBuffer as ArrayBuffer);
+    expect(buf.length).toBeGreaterThan(100000);
+
+    // Verify GLB magic header
+    const magic = buf.toString('ascii', 0, 4);
+    expect(magic).toBe('glTF');
+    const version = buf.readUInt32LE(4);
+    expect(version).toBe(2);
+
+    // Verify glTF JSON chunk contains animations
+    const jsonLength = buf.readUInt32LE(12);
+    const jsonData = buf.toString('utf-8', 20, 20 + jsonLength);
+    const gltf = JSON.parse(jsonData);
+
+    expect(gltf.animations).toBeDefined();
+    expect(gltf.animations.length).toBe(1);
+    expect(gltf.animations[0].channels.length).toBe(21); // 7 parts x 3 channels (pos, rot, scale)
   });
 });
