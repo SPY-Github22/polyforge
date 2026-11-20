@@ -296,4 +296,98 @@ describe('Anatomical Character Engine (Realistic Human)', () => {
     }
     expect(redGlassesVerts).toBeGreaterThan(100);
   });
+
+  it('verifies watertight cranium vault with crown cap and outward-facing facial normals', () => {
+    const human = generateRealisticHumanScene();
+    const bodyGeo = createPrimitiveGeometry(human.bodyItem.primitiveType || 'custom', human.bodyItem.geometryParams);
+    const pos = bodyGeo.getAttribute('position') as THREE.BufferAttribute;
+    const norm = bodyGeo.getAttribute('normal') as THREE.BufferAttribute;
+
+    // Verify crown cap vertex at top of cranium (y = 1.760, normal pointing +y)
+    let crownCapFound = false;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - 1.760) < 1e-3 && Math.abs(pos.getX(i)) < 1e-3) {
+        if (norm.getY(i) > 0.95) {
+          crownCapFound = true;
+          break;
+        }
+      }
+    }
+    expect(crownCapFound).toBe(true);
+
+    // Verify chin apex cap vertex at y = 1.542 with downward normal pointing -y
+    let chinCapFound = false;
+    for (let i = 0; i < pos.count; i++) {
+      if (Math.abs(pos.getY(i) - 1.542) < 1e-3 && Math.abs(pos.getX(i)) < 1e-3) {
+        if (norm.getY(i) < -0.90) {
+          chinCapFound = true;
+          break;
+        }
+      }
+    }
+    expect(chinCapFound).toBe(true);
+  });
+
+  it('verifies upper garment (jacket/shirt) has outward-facing chest normals without inverted faces', () => {
+    const human = generateRealisticHumanScene();
+    const shirtGeo = createPrimitiveGeometry(human.clothingUpperItem!.primitiveType || 'custom', human.clothingUpperItem!.geometryParams);
+    const pos = shirtGeo.getAttribute('position') as THREE.BufferAttribute;
+    const norm = shirtGeo.getAttribute('normal') as THREE.BufferAttribute;
+
+    let outwardShirtChest = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      if (y >= 1.05 && y <= 1.40 && z > 0.06) {
+        if (norm.getZ(i) > 0.2) outwardShirtChest++;
+      }
+    }
+    expect(outwardShirtChest).toBeGreaterThan(25);
+  });
+
+  it('verifies trousers continuous crotch junction encasing hips and seat down to bifurcation', () => {
+    const human = generateRealisticHumanScene();
+    const pantsGeo = createPrimitiveGeometry(human.clothingLowerItem!.primitiveType || 'custom', human.clothingLowerItem!.geometryParams);
+    const pos = pantsGeo.getAttribute('position') as THREE.BufferAttribute;
+
+    // Verify pelvic seat at crotch bifurcation fork (y ~ 0.81m) bridges smoothly across midline (x = 0)
+    let crotchMidlineVerts = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      if (Math.abs(x) < 0.02 && y >= 0.78 && y <= 0.85) {
+        crotchMidlineVerts++;
+      }
+    }
+    expect(crotchMidlineVerts).toBeGreaterThan(10);
+  });
+
+  it('verifies footwear toe cap, laces, and accessories toruses conform to limb trajectories', () => {
+    const human = generateRealisticHumanScene();
+    const shoesGeo = createPrimitiveGeometry(human.footwearItem!.primitiveType || 'custom', human.footwearItem!.geometryParams);
+    const shoesBox = new THREE.Box3().setFromBufferAttribute(shoesGeo.getAttribute('position') as THREE.BufferAttribute);
+
+    // Footwear must touch y = 0.0 ground plane
+    expect(shoesBox.min.y).toBeCloseTo(0.0, 2);
+
+    // Left and right feet should be symmetrically flared
+    expect(Math.abs(shoesBox.min.x)).toBeGreaterThan(0.04);
+    expect(Math.abs(shoesBox.max.x)).toBeGreaterThan(0.04);
+
+    // Verify smartwatch strap torus normal aligns with arm direction (normal has significant downward Y component)
+    const accGeo = createPrimitiveGeometry(human.accessoriesItem!.primitiveType || 'custom', human.accessoriesItem!.geometryParams);
+    const accPos = accGeo.getAttribute('position') as THREE.BufferAttribute;
+    const accNorm = accGeo.getAttribute('normal') as THREE.BufferAttribute;
+
+    // Wrist area (x ~ -0.292, y ~ 0.902)
+    let downwardWristNormals = 0;
+    for (let i = 0; i < accPos.count; i++) {
+      const x = accPos.getX(i);
+      const y = accPos.getY(i);
+      if (x < -0.26 && x > -0.32 && y > 0.87 && y < 0.93) {
+        if (Math.abs(accNorm.getY(i)) > 0.5) downwardWristNormals++;
+      }
+    }
+    expect(downwardWristNormals).toBeGreaterThan(15);
+  });
 });

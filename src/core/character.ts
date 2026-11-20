@@ -143,6 +143,8 @@ function addLoftRings(
   for (let r = 0; r < rings.length - 1; r++) {
     const ring1 = startVIdx + r * stride;
     const ring2 = startVIdx + (r + 1) * stride;
+    const dy = rings[r + 1].center.y - rings[r].center.y;
+    const upward = dy > 0;
 
     for (let s = 0; s < segments; s++) {
       const a = ring1 + s;
@@ -150,16 +152,24 @@ function addLoftRings(
       const c = ring2 + s + 1;
       const d = ring1 + s + 1;
 
-      // Outward facing triangle winding for top-to-bottom loft rings
-      buf.indices.push(a, d, b);
-      buf.indices.push(b, d, c);
+      // Ensure outward-facing triangle winding regardless of top-to-bottom or bottom-to-top loft order
+      if (upward) {
+        buf.indices.push(a, b, d);
+        buf.indices.push(b, c, d);
+      } else {
+        buf.indices.push(a, d, b);
+        buf.indices.push(b, d, c);
+      }
     }
   }
 
-  // Cap top (faces outward +y)
+  const isDescending = rings[0].center.y >= rings[rings.length - 1].center.y;
+
+  // Cap top (highest Y, faces outward +y)
   if (capTop) {
-    const topRing = rings[0];
-    const topVStart = startVIdx;
+    const topRingIdx = isDescending ? 0 : rings.length - 1;
+    const topRing = rings[topRingIdx];
+    const topVStart = startVIdx + topRingIdx * stride;
     const cIdx = buf.positions.length / 3;
     buf.positions.push(topRing.center.x, topRing.center.y, topRing.center.z);
     buf.normals.push(0, 1, 0);
@@ -171,10 +181,11 @@ function addLoftRings(
     }
   }
 
-  // Cap bottom (faces outward -y)
+  // Cap bottom (lowest Y, faces outward -y)
   if (capBottom) {
-    const botRing = rings[rings.length - 1];
-    const botVStart = startVIdx + (rings.length - 1) * stride;
+    const botRingIdx = isDescending ? rings.length - 1 : 0;
+    const botRing = rings[botRingIdx];
+    const botVStart = startVIdx + botRingIdx * stride;
     const cIdx = buf.positions.length / 3;
     buf.positions.push(botRing.center.x, botRing.center.y, botRing.center.z);
     buf.normals.push(0, -1, 0);
@@ -572,30 +583,30 @@ export function generateRealisticHumanScene(
   const vermilionLips = skinColorObj.clone().lerp(new THREE.Color('#b91c1c'), 0.38);
 
   // --- Anatomically Sculpted Cranium, Jawline, & Facial Mesh ---
-  // A single continuous loft for the skull base and facial contours eliminates disjointed primitives.
+  // A single continuous loft from crown to chin apex eliminates disjointed primitives.
   const cranialFaceRings: LoftRing[] = [
-    // 1. Chin apex
-    { center: new THREE.Vector3(0, 1.542, 0.038), rx: 0.024, rz: 0.026 },
-    // 2. Mentolabial sulcus & lower jaw base
-    { center: new THREE.Vector3(0, 1.562, 0.024), rx: 0.046, rz: 0.050 },
-    // 3. Mouth & upper jaw / philtrum
-    { center: new THREE.Vector3(0, 1.584, 0.012), rx: 0.058, rz: 0.062, frontOffset: 0.012 },
-    // 4. Subnasale & nasal base
-    { center: new THREE.Vector3(0, 1.610, 0.005), rx: 0.066, rz: 0.072, frontOffset: 0.016 },
-    // 5. Zygomatic arches (cheekbones) & mid-nose
-    { center: new THREE.Vector3(0, 1.634, -0.002), rx: 0.074, rz: 0.080, frontOffset: 0.014 },
-    // 6. Recessed orbit plane & eye sockets
-    { center: new THREE.Vector3(0, 1.652, -0.006), rx: 0.078, rz: 0.085 },
-    // 7. Brow ridge (superciliary arches)
-    { center: new THREE.Vector3(0, 1.670, -0.010), rx: 0.080, rz: 0.088, frontOffset: 0.006 },
-    // 8. Forehead & frontal bone
-    { center: new THREE.Vector3(0, 1.700, -0.014), rx: 0.081, rz: 0.092 },
-    // 9. Cranial vault / parietal apex
-    { center: new THREE.Vector3(0, 1.735, -0.018), rx: 0.076, rz: 0.088 },
-    // 10. Crown of head (vertex)
+    // 1. Crown of head (vertex)
     { center: new THREE.Vector3(0, 1.760, -0.020), rx: 0.052, rz: 0.064 },
+    // 2. Cranial vault / parietal apex
+    { center: new THREE.Vector3(0, 1.735, -0.018), rx: 0.076, rz: 0.088 },
+    // 3. Forehead & frontal bone
+    { center: new THREE.Vector3(0, 1.700, -0.014), rx: 0.081, rz: 0.092 },
+    // 4. Brow ridge (superciliary arches)
+    { center: new THREE.Vector3(0, 1.670, -0.010), rx: 0.080, rz: 0.088, frontOffset: 0.006 },
+    // 5. Recessed orbit plane & eye sockets
+    { center: new THREE.Vector3(0, 1.652, -0.006), rx: 0.078, rz: 0.085 },
+    // 6. Zygomatic arches (cheekbones) & mid-nose
+    { center: new THREE.Vector3(0, 1.634, -0.002), rx: 0.074, rz: 0.080, frontOffset: 0.014 },
+    // 7. Subnasale & nasal base
+    { center: new THREE.Vector3(0, 1.610, 0.005), rx: 0.066, rz: 0.072, frontOffset: 0.016 },
+    // 8. Mouth & upper jaw / philtrum
+    { center: new THREE.Vector3(0, 1.584, 0.012), rx: 0.058, rz: 0.062, frontOffset: 0.012 },
+    // 9. Mentolabial sulcus & lower jaw base
+    { center: new THREE.Vector3(0, 1.562, 0.024), rx: 0.046, rz: 0.050 },
+    // 10. Chin apex
+    { center: new THREE.Vector3(0, 1.542, 0.038), rx: 0.024, rz: 0.026 },
   ];
-  addLoftRings(cranialFaceRings, 24, bodyBuf, true, false, skinColorObj);
+  addLoftRings(cranialFaceRings, 24, bodyBuf, true, true, skinColorObj);
 
   // Recessed Eye Sockets & Sculpted Eyes (Left and Right)
   for (const side of [1, -1]) {
@@ -981,30 +992,31 @@ export function generateRealisticHumanScene(
     const shirtColorObj = new THREE.Color(shirtColor);
 
     // 1. Unified Torso Shell & Shoulder Yoke Loft:
-    // Extends continuously from hip hem (y=0.90) through chest, shoulder yoke (y=1.45),
-    // and tapers smoothly into an integrated stand-up neckline collar (y=1.52).
+    // Extends continuously from integrated stand-up neckline collar (y=1.52) through
+    // shoulder yoke (y=1.45), thoracic chest, waist, and hip hem (y=0.90) overlapping trousers.
     const jacketTorsoRings: LoftRing[] = [
-      // Hip hem (overlaps trousers waistband cleanly)
-      { center: new THREE.Vector3(0, 0.900, -0.006), rx: 0.170, rz: 0.134, backOffset: 0.026 },
-      { center: new THREE.Vector3(0, 0.960, -0.005), rx: 0.166, rz: 0.130, backOffset: 0.024 },
-      // Waist
-      { center: new THREE.Vector3(0, 1.100, -0.002), rx: 0.154, rz: 0.116, frontOffset: 0.008 },
-      // Mid-chest / ribcage
-      { center: new THREE.Vector3(0, 1.240, -0.004), rx: 0.168, rz: 0.124 },
-      // Thoracic chest & underarm junction
-      { center: new THREE.Vector3(0, 1.370, -0.008), rx: 0.182, rz: 0.134, frontOffset: 0.022 },
-      // Shoulder Yoke: Spans continuously across both shoulders (-0.22m to +0.22m)
-      { center: new THREE.Vector3(0, 1.435, -0.008), rx: 0.224, rz: 0.126 },
-      // Clavicular slope bridging into neck base
-      { center: new THREE.Vector3(0, 1.465, -0.007), rx: 0.210, rz: 0.112 },
-      // Trapezoid transition
-      { center: new THREE.Vector3(0, 1.488, -0.006), rx: 0.138, rz: 0.088 },
-      // Integrated Neckline / Collar Base (sits flush against the neck cylinder, radius 0.068m)
-      { center: new THREE.Vector3(0, 1.505, -0.005), rx: 0.068, rz: 0.070 },
       // Collar Top Rim
       { center: new THREE.Vector3(0, 1.520, -0.005), rx: 0.066, rz: 0.068 },
+      // Integrated Neckline / Collar Base (sits flush against the neck cylinder, radius 0.068m)
+      { center: new THREE.Vector3(0, 1.505, -0.005), rx: 0.068, rz: 0.070 },
+      // Trapezoid transition
+      { center: new THREE.Vector3(0, 1.488, -0.006), rx: 0.138, rz: 0.088 },
+      // Clavicular slope bridging into neck base
+      { center: new THREE.Vector3(0, 1.465, -0.007), rx: 0.210, rz: 0.112 },
+      // Shoulder Yoke: Spans continuously across both shoulders (-0.22m to +0.22m)
+      { center: new THREE.Vector3(0, 1.435, -0.008), rx: 0.224, rz: 0.126 },
+      // Thoracic chest & underarm junction
+      { center: new THREE.Vector3(0, 1.370, -0.008), rx: 0.182, rz: 0.134, frontOffset: 0.022 },
+      // Mid-chest / ribcage
+      { center: new THREE.Vector3(0, 1.240, -0.004), rx: 0.168, rz: 0.124 },
+      // Waist
+      { center: new THREE.Vector3(0, 1.100, -0.002), rx: 0.154, rz: 0.116, frontOffset: 0.008 },
+      // Lower waist & hips
+      { center: new THREE.Vector3(0, 0.960, -0.005), rx: 0.166, rz: 0.130, backOffset: 0.024 },
+      // Hip hem (overlaps trousers waistband cleanly)
+      { center: new THREE.Vector3(0, 0.900, -0.006), rx: 0.170, rz: 0.134, backOffset: 0.026 },
     ];
-    addLoftRings(jacketTorsoRings, 26, upperBuf, false, true, shirtColorObj);
+    addLoftRings(jacketTorsoRings, 26, upperBuf, false, false, shirtColorObj);
 
     // Integrated folded collar trim (snugly hugs the neckline at y=1.505)
     addTorus(
@@ -1049,26 +1061,32 @@ export function generateRealisticHumanScene(
       ];
       addLoftRings(sleeveRings, 18, upperBuf, false, false, shirtColorObj.clone().multiplyScalar(0.98));
 
-      // Shoulder armhole piping welt seam (cleanly delineates shoulder and sleeve)
+      // Calculate orientation quaternion aligning circular cross-section with the relaxed A-pose arm trajectory
+      const armDir = new THREE.Vector3(side * 0.086, -0.535, 0).normalize();
+      const armRot = new THREE.Euler().setFromQuaternion(
+        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), armDir)
+      );
+
+      // Shoulder armhole piping welt seam (cleanly delineates shoulder and sleeve, perpendicular to arm axis)
       addTorus(
         new THREE.Vector3(side * 0.212, 1.428, -0.008),
         0.064,
         0.005,
         10,
         20,
-        new THREE.Euler(0, 0, side * 0.22),
+        armRot,
         upperBuf,
         shirtColorObj.clone().multiplyScalar(0.88)
       );
 
-      // Folded sleeve cuff band at wrist
+      // Folded sleeve cuff band at wrist (perpendicular to arm axis, cleanly encircling wrist)
       addTorus(
         new THREE.Vector3(side * 0.296, 0.895, -0.008),
         0.038,
         0.006,
         10,
         18,
-        new THREE.Euler(0, 0, side * 0.14),
+        armRot,
         upperBuf,
         shirtColorObj.clone().multiplyScalar(0.88)
       );
@@ -1103,21 +1121,26 @@ export function generateRealisticHumanScene(
 
     // 1. Pelvic Shell & Waistband (Starts at y=1.01m down to crotch fork y=0.81m)
     const pelvicPantsRings: LoftRing[] = [
-      { center: new THREE.Vector3(0, 1.010, -0.004), rx: 0.165, rz: 0.126 },                     // Waistband top
+      { center: new THREE.Vector3(0, 1.010, -0.004), rx: 0.165, rz: 0.126 },                     // Waistband top (open for torso)
       { center: new THREE.Vector3(0, 0.960, -0.006), rx: 0.169, rz: 0.132, backOffset: 0.024 },  // Waistband lower seam
       { center: new THREE.Vector3(0, 0.890, -0.008), rx: 0.176, rz: 0.138, backOffset: 0.032 },  // Hips & gluteals
       { center: new THREE.Vector3(0, 0.840, -0.008), rx: 0.170, rz: 0.132, backOffset: 0.020 },  // Lower pelvic seat
       { center: new THREE.Vector3(0, 0.810, -0.008), rx: 0.156, rz: 0.120 },                     // Crotch bifurcation fork
     ];
-    addLoftRings(pelvicPantsRings, 26, lowerBuf, true, false, pantsColorObj.clone().multiplyScalar(0.96));
+    addLoftRings(pelvicPantsRings, 26, lowerBuf, false, false, pantsColorObj.clone().multiplyScalar(0.96));
 
-    // Continuous crotch saddle / perineal bridge gusset (smoothly seals the crotch junction between the legs)
-    const crotchSaddleRings: LoftRing[] = [
-      { center: new THREE.Vector3(0, 0.835, 0.095), rx: 0.075, rz: 0.040 },
-      { center: new THREE.Vector3(0, 0.805, 0.000), rx: 0.068, rz: 0.055 },
-      { center: new THREE.Vector3(0, 0.825, -0.090), rx: 0.078, rz: 0.045 },
-    ];
-    addLoftRings(crotchSaddleRings, 16, lowerBuf, true, true, pantsColorObj.clone().multiplyScalar(0.92));
+    // Continuous crotch saddle / perineal bridge gusset:
+    // Smoothly and seamlessly seals the crotch junction between the legs with 100% outward-facing curvature
+    addEllipsoid(
+      new THREE.Vector3(0, 0.815, -0.008),
+      0.055,
+      0.032,
+      0.075,
+      14,
+      10,
+      lowerBuf,
+      pantsColorObj.clone().multiplyScalar(0.92)
+    );
 
     // Front fly seam & brass button
     addBox(
@@ -1247,8 +1270,8 @@ export function generateRealisticHumanScene(
       ];
       addLoftRings(sneakerUpperRings, 18, shoesBuf, false, true, shoesColorObj);
 
-      // 4. Curved structured toe cap rand
-      const toeRandCenter = new THREE.Vector3(xFoot, 0.034, 0.134).applyEuler(footRot);
+      // 4. Curved structured toe cap rand (rotated cleanly around foot stance center)
+      const toeRandCenter = new THREE.Vector3(0, 0.034, 0.134).applyEuler(footRot).add(new THREE.Vector3(xFoot, 0, 0));
       addEllipsoid(
         toeRandCenter,
         0.044,
@@ -1261,21 +1284,22 @@ export function generateRealisticHumanScene(
         footRot
       );
 
-      // 5. Padded shoe tongue rising up the instep
+      // 5. Padded shoe tongue rising up the instep (aligned with foot flare)
+      const tongueCenter = new THREE.Vector3(0, 0.088, 0.044).applyEuler(footRot).add(new THREE.Vector3(xFoot, 0, 0));
       addBox(
-        new THREE.Vector3(xFoot, 0.088, 0.044),
+        tongueCenter,
         new THREE.Vector3(0.034, 0.082, 0.014),
-        new THREE.Euler(0.46, -side * 0.087, 0),
+        new THREE.Euler(0.46, -side * 0.087, 0, 'YXZ'),
         shoesBuf,
         shoesColorObj.clone().multiplyScalar(0.92)
       );
 
-      // 6. Cross-laced eyelets and crisp laces
+      // 6. Cross-laced eyelets and crisp laces (angled with 5° foot flare)
       for (let laceIdx = 0; laceIdx < 4; laceIdx++) {
         const lz = 0.036 + laceIdx * 0.022;
         const ly = 0.055 + laceIdx * 0.018;
-        const pLace1 = new THREE.Vector3(xFoot - 0.018, ly, lz);
-        const pLace2 = new THREE.Vector3(xFoot + 0.018, ly, lz);
+        const pLace1 = new THREE.Vector3(-0.018, ly, lz).applyEuler(footRot).add(new THREE.Vector3(xFoot, 0, 0));
+        const pLace2 = new THREE.Vector3(+0.018, ly, lz).applyEuler(footRot).add(new THREE.Vector3(xFoot, 0, 0));
         addCylinder(
           pLace1,
           pLace2,
@@ -1324,10 +1348,10 @@ export function generateRealisticHumanScene(
     const watchColorObj = new THREE.Color(watchColor);
 
     // --- Sleek Modern Eyewear (Wayfarer / Rectangular frames hugging face at realistic depth) ---
-    // Sits naturally at z=0.076m (~10mm in front of eye plane), resting securely on nasal bridge and ears
+    // Sits naturally at z=0.082m (~15mm in front of eye plane), resting securely on nasal bridge and ears
     for (const side of [1, -1]) {
       const xEye = side * 0.034;
-      const eyeZ = 0.074;
+      const eyeZ = 0.082; // Exactly 15mm forward from anatomical eye plane (z=0.067m)
 
       // Modern sleek frame rim (4 rounded rectangular border segments)
       // Top bar
@@ -1389,9 +1413,9 @@ export function generateRealisticHumanScene(
       );
     }
 
-    // Sleek contoured nasal bridge connector
+    // Sleek contoured nasal bridge connector (sits naturally on dorsal nose apex)
     addBox(
-      new THREE.Vector3(0, 1.658, 0.075),
+      new THREE.Vector3(0, 1.658, 0.082),
       new THREE.Vector3(0.018, 0.0025, 0.003),
       new THREE.Euler(0, 0, 0),
       accBuf,
@@ -1399,7 +1423,7 @@ export function generateRealisticHumanScene(
     );
 
     // --- Smart Watch / Wristwatch (on Left Wrist in Relaxed A-Pose) ---
-    // Positioned at the relaxed forearm wrist center (-0.292, 0.900, -0.008)
+    // Positioned at the relaxed forearm wrist center (-0.292, 0.902, -0.008)
     const watchCenter = new THREE.Vector3(-0.292, 0.902, -0.008);
     // Metallic bezel casing
     addCylinder(
@@ -1439,14 +1463,18 @@ export function generateRealisticHumanScene(
       watchColorObj.clone().multiplyScalar(1.1)
     );
 
-    // Fitted wrist strap wrapping around wrist circumference
+    // Fitted wrist strap wrapping around wrist circumference, perpendicular to left arm trajectory
+    const leftArmDir = new THREE.Vector3(-0.086, -0.535, 0).normalize();
+    const leftArmRot = new THREE.Euler().setFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), leftArmDir)
+    );
     addTorus(
       watchCenter,
       0.035,
       0.006,
       8,
       18,
-      new THREE.Euler(0, 0, -0.14),
+      leftArmRot,
       accBuf,
       new THREE.Color('#1e293b') // Dark silicone/leather strap
     );
