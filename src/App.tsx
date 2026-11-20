@@ -1,0 +1,737 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  AnimationTrack,
+  CameraView,
+  EnvironmentSettings,
+  MaterialProperties,
+  PrimitiveType,
+  SceneItem,
+  ShadingMode,
+  TimelineState,
+  TransformData,
+  TransformMode,
+  ViewportStats,
+} from './types';
+import { Engine } from './core/engine';
+import {
+  evaluateTrackAtFrame,
+  insertOrUpdateKeyframe,
+  removeKeyframeAt,
+  createTurntableTrack,
+} from './core/animation';
+import {
+  exportToGLTF,
+  exportToOBJ,
+  exportToSTL,
+  captureViewportImage,
+  exportProjectFile,
+  parseProjectFile,
+} from './core/io';
+import { history } from './core/history';
+import { TopNavbar } from './components/TopNavbar';
+import { LeftToolbar } from './components/LeftToolbar';
+import { RightInspector } from './components/RightInspector';
+import { Timeline } from './components/Timeline';
+import { Viewport } from './components/Viewport';
+import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+
+const DEFAULT_MATERIAL: MaterialProperties = {
+  color: '#388bfd',
+  roughness: 0.35,
+  metalness: 0.2,
+  emissive: '#000000',
+  emissiveIntensity: 0,
+  transmission: 0,
+  opacity: 1,
+  transparent: false,
+  wireframe: false,
+  texturePreset: 'none',
+};
+
+const DEFAULT_ENVIRONMENT: EnvironmentSettings = {
+  backgroundColor: '#0d1117',
+  ambientIntensity: 0.6,
+  directionalIntensity: 1.2,
+  showGrid: true,
+  showAxes: true,
+  shadows: true,
+  preset: 'studio',
+};
+
+export const App: React.FC = () => {
+  // Scene Items
+  const [sceneItems, setSceneItems] = useState<SceneItem[]>([
+    {
+      id: 'default-cube',
+      name: 'Studio Cube',
+      type: 'mesh',
+      primitiveType: 'box',
+      transform: {
+        position: [0, 0.5, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+      material: { ...DEFAULT_MATERIAL },
+      visible: true,
+      locked: false,
+      modifiers: [],
+    },
+  ]);
+
+  const [selectedId, setSelectedId] = useState<string | null>('default-cube');
+  const [transformMode, setTransformMode] = useState<TransformMode>('translate');
+  const [shadingMode, setShadingMode] = useState<ShadingMode>('rendered');
+  const [cameraView, setCameraView] = useState<CameraView>('perspective');
+  const [environment, setEnvironment] = useState<EnvironmentSettings>(DEFAULT_ENVIRONMENT);
+
+  // Animation State
+  const [tracks, setTracks] = useState<AnimationTrack[]>([]);
+  const [timelineState, setTimelineState] = useState<TimelineState>({
+    currentFrame: 0,
+    totalFrames: 120,
+    fps: 30,
+    isPlaying: false,
+    isLooping: true,
+    autoKeying: false,
+  });
+
+  // Diagnostics & Modals
+  const [stats, setStats] = useState<ViewportStats>({
+    fps: 60,
+    triangles: 12,
+    vertices: 24,
+    objectsCount: 1,
+  });
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [, setHistoryTick] = useState(0);
+
+  // Engine references
+  const containerRef = useRef<HTMLDivElement>(null);
+  const engineRef = useRef<Engine | null>(null);
+
+  // Subscribe to history changes for Undo/Redo button updates
+  useEffect(() => {
+    return history.subscribe(() => setHistoryTick((t) => t + 1));
+  }, []);
+
+  // Initialize Engine
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const engine = new Engine(containerRef.current, {
+      onSelectObject: (id) => setSelectedId(id),
+      onObjectTransformed: (id, newTransform) => {
+        setSceneItems((prev) =>
+          prev.map((item) => (item.id === id ? { ...item, transform: newTransform } : item))
+        );
+      },
+      onTransformCommit: (id, committedTransform) => {
+        // Record undoable history step
+        const oldItem = sceneItems.find((it) => it.id === id);
+        if (oldItem) {
+          const prevTransform = { ...oldItem.transform };
+          history.record({
+            name: `Transform ${oldItem.name}`,
+            undo: () => {
+              setSceneItems((cur) =>
+                cur.map((it) => (it.id === id ? { ...it, transform: prevTransform } : it))
+              );
+            },
+            redo: () => {
+              setSceneItems((cur) =>
+                cur.map((it) => (it.id === id ? { ...it, transform: committedTransform } : it))
+              );
+            },
+          });
+        }
+
+        // Auto-keying check
+        if (timelineState.autoKeying) {
+          handleAddKeyframeForObject(id, committedTransform);
+        }
+      },
+      onStatsUpdate: (newStats) => setStats(newStats),
+    });
+
+    engineRef.current = engine;
+    engine.syncSceneItems(sceneItems);
+    engine.setSelectedObject(selectedId);
+    engine.setTransformMode(transformMode);
+    engine.updateEnvironment(environment);
+
+    return () => {
+      engine.destroy();
+      engineRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync engine scene items when state changes
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.syncSceneItems(sceneItems);
+    }
+  }, [sceneItems]);
+
+  // Sync selection to engine
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setSelectedObject(selectedId);
+    }
+  }, [selectedId]);
+
+  // Sync transform mode
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setTransformMode(transformMode);
+    }
+  }, [transformMode]);
+
+  // Sync shading mode
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setShadingMode(shadingMode);
+      engineRef.current.syncSceneItems(sceneItems);
+    }
+  }, [shadingMode, sceneItems]);
+
+  // Sync camera view
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.setCameraView(cameraView);
+    }
+  }, [cameraView]);
+
+  // Sync environment
+  useEffect(() => {
+    if (engineRef.current) {
+      engineRef.current.updateEnvironment(environment);
+    }
+  }, [environment]);
+
+  // Animation Playback Interval
+  useEffect(() => {
+    if (!timelineState.isPlaying) return;
+
+    const intervalMs = 1000 / timelineState.fps;
+    const timer = setInterval(() => {
+      setTimelineState((prev) => {
+        let nextFrame = prev.currentFrame + 1;
+        if (nextFrame > prev.totalFrames) {
+          if (prev.isLooping) {
+            nextFrame = 0;
+          } else {
+            return { ...prev, isPlaying: false };
+          }
+        }
+        return { ...prev, currentFrame: nextFrame };
+      });
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [timelineState.isPlaying, timelineState.fps]);
+
+  // Evaluate Animated Transforms at current frame
+  useEffect(() => {
+    if (tracks.length === 0) return;
+
+    setSceneItems((prev) =>
+      prev.map((item) => {
+        const track = tracks.find((t) => t.objectId === item.id);
+        if (!track || track.keyframes.length === 0) return item;
+
+        const evaluatedTransform = evaluateTrackAtFrame(track, timelineState.currentFrame, item.transform);
+        return {
+          ...item,
+          transform: evaluatedTransform,
+        };
+      })
+    );
+  }, [timelineState.currentFrame, tracks]);
+
+  // Add Primitive action
+  const handleAddPrimitive = (type: PrimitiveType) => {
+    const id = `mesh-${type}-${Date.now().toString(36)}`;
+    const count = sceneItems.filter((it) => it.primitiveType === type).length + 1;
+    const name = `${type.charAt(0).toUpperCase() + type.slice(1)} ${count}`;
+
+    const newItem: SceneItem = {
+      id,
+      name,
+      type: 'mesh',
+      primitiveType: type,
+      transform: {
+        position: [0, type === 'plane' ? 0 : 0.5, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+      material: { ...DEFAULT_MATERIAL },
+      visible: true,
+      locked: false,
+      modifiers: [],
+    };
+
+    history.execute({
+      name: `Add ${name}`,
+      undo: () => {
+        setSceneItems((prev) => prev.filter((it) => it.id !== id));
+        setSelectedId(null);
+      },
+      redo: () => {
+        setSceneItems((prev) => [...prev, newItem]);
+        setSelectedId(id);
+      },
+    });
+  };
+
+  // Delete Selected object
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedId) return;
+    const itemToDelete = sceneItems.find((it) => it.id === selectedId);
+    if (!itemToDelete) return;
+
+    history.execute({
+      name: `Delete ${itemToDelete.name}`,
+      undo: () => {
+        setSceneItems((prev) => [...prev, itemToDelete]);
+        setSelectedId(itemToDelete.id);
+      },
+      redo: () => {
+        setSceneItems((prev) => prev.filter((it) => it.id !== selectedId));
+        setSelectedId(null);
+      },
+    });
+  }, [selectedId, sceneItems]);
+
+  // Duplicate Selected object
+  const handleDuplicateSelected = useCallback(() => {
+    if (!selectedId) return;
+    const source = sceneItems.find((it) => it.id === selectedId);
+    if (!source) return;
+
+    const id = `copy-${Date.now().toString(36)}`;
+    const newItem: SceneItem = {
+      ...source,
+      id,
+      name: `${source.name} (Copy)`,
+      transform: {
+        position: [
+          source.transform.position[0] + 0.5,
+          source.transform.position[1],
+          source.transform.position[2] + 0.5,
+        ],
+        rotation: [...source.transform.rotation],
+        scale: [...source.transform.scale],
+      },
+      modifiers: source.modifiers ? [...source.modifiers] : [],
+    };
+
+    history.execute({
+      name: `Duplicate ${source.name}`,
+      undo: () => {
+        setSceneItems((prev) => prev.filter((it) => it.id !== id));
+        setSelectedId(source.id);
+      },
+      redo: () => {
+        setSceneItems((prev) => [...prev, newItem]);
+        setSelectedId(id);
+      },
+    });
+  }, [selectedId, sceneItems]);
+
+  // Update Transform from Inspector
+  const handleUpdateTransform = (id: string, newTransform: TransformData) => {
+    setSceneItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, transform: newTransform } : item))
+    );
+  };
+
+  // Update Material
+  const handleUpdateMaterial = (id: string, newMaterial: MaterialProperties) => {
+    setSceneItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, material: newMaterial } : item))
+    );
+  };
+
+  // Modifiers
+  const handleAddModifier = (id: string, type: 'noise_displace' | 'twist' | 'subdivide') => {
+    const modId = `mod-${Date.now().toString(36)}`;
+    setSceneItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const defaultFactor = type === 'subdivide' ? 1 : type === 'twist' ? 1.5 : 0.2;
+        const newMods = [...(item.modifiers || []), { id: modId, type, factor: defaultFactor, enabled: true }];
+        const updatedItem = { ...item, modifiers: newMods };
+        if (engineRef.current) {
+          engineRef.current.rebuildObjectGeometry(updatedItem);
+        }
+        return updatedItem;
+      })
+    );
+  };
+
+  const handleUpdateModifierFactor = (id: string, modId: string, factor: number) => {
+    setSceneItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const updatedMods = (item.modifiers || []).map((m) => (m.id === modId ? { ...m, factor } : m));
+        const updatedItem = { ...item, modifiers: updatedMods };
+        if (engineRef.current) {
+          engineRef.current.rebuildObjectGeometry(updatedItem);
+        }
+        return updatedItem;
+      })
+    );
+  };
+
+  const handleToggleModifier = (id: string, modId: string) => {
+    setSceneItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const updatedMods = (item.modifiers || []).map((m) =>
+          m.id === modId ? { ...m, enabled: !m.enabled } : m
+        );
+        const updatedItem = { ...item, modifiers: updatedMods };
+        if (engineRef.current) {
+          engineRef.current.rebuildObjectGeometry(updatedItem);
+        }
+        return updatedItem;
+      })
+    );
+  };
+
+  const handleDeleteModifier = (id: string, modId: string) => {
+    setSceneItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        const updatedMods = (item.modifiers || []).filter((m) => m.id !== modId);
+        const updatedItem = { ...item, modifiers: updatedMods };
+        if (engineRef.current) {
+          engineRef.current.rebuildObjectGeometry(updatedItem);
+        }
+        return updatedItem;
+      })
+    );
+  };
+
+  // Add Keyframe Helper
+  const handleAddKeyframeForObject = (objectId: string, transform: TransformData) => {
+    setTracks((prev) => {
+      let existingTrack = prev.find((t) => t.objectId === objectId);
+      if (!existingTrack) {
+        existingTrack = { objectId, keyframes: [] };
+      }
+      const updatedTrack = insertOrUpdateKeyframe(
+        existingTrack,
+        timelineState.currentFrame,
+        transform,
+        'ease-in-out'
+      );
+      return [...prev.filter((t) => t.objectId !== objectId), updatedTrack];
+    });
+  };
+
+  // Keyframe timeline callbacks
+  const handleAddKeyframe = () => {
+    if (!selectedId) return;
+    const item = sceneItems.find((it) => it.id === selectedId);
+    if (!item) return;
+    handleAddKeyframeForObject(selectedId, item.transform);
+  };
+
+  const handleRemoveKeyframe = () => {
+    if (!selectedId) return;
+    setTracks((prev) =>
+      prev.map((t) => (t.objectId === selectedId ? removeKeyframeAt(t, timelineState.currentFrame) : t))
+    );
+  };
+
+  const handleGenerateTurntable = () => {
+    if (!selectedId) return;
+    const item = sceneItems.find((it) => it.id === selectedId);
+    if (!item) return;
+    const newTrack = createTurntableTrack(selectedId, item.transform, 0, timelineState.totalFrames);
+    setTracks((prev) => [...prev.filter((t) => t.objectId !== selectedId), newTrack]);
+  };
+
+  // Project I/O Actions
+  const handleNewScene = () => {
+    if (window.confirm('Create a new scene? Any unsaved changes will be cleared.')) {
+      history.clear();
+      setSceneItems([]);
+      setSelectedId(null);
+      setTracks([]);
+    }
+  };
+
+  const handleSaveProject = () => {
+    exportProjectFile(sceneItems, tracks, environment);
+  };
+
+  const handleOpenProject = async (file: File) => {
+    try {
+      const text = await file.text();
+      const data = parseProjectFile(text);
+      history.clear();
+      setSceneItems(data.items);
+      setTracks(data.tracks || []);
+      if (data.environment) setEnvironment(data.environment);
+      setSelectedId(data.items.length > 0 ? data.items[0].id : null);
+    } catch (err) {
+      alert(`Failed to load project file: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleExportGLTF = (binary: boolean) => {
+    if (engineRef.current) {
+      exportToGLTF(engineRef.current.scene, binary, 'polyforge-model');
+    }
+  };
+
+  const handleExportOBJ = () => {
+    if (engineRef.current) {
+      exportToOBJ(engineRef.current.scene, 'polyforge-model');
+    }
+  };
+
+  const handleExportSTL = () => {
+    if (engineRef.current) {
+      exportToSTL(engineRef.current.scene, true, 'polyforge-model');
+    }
+  };
+
+  const handleCaptureSnapshot = () => {
+    if (engineRef.current) {
+      captureViewportImage(engineRef.current.renderer, 'polyforge-render.png');
+    }
+  };
+
+  // Keyboard Shortcuts Handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is currently typing inside an input/textarea
+      const activeEl = document.activeElement;
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      // Undo / Redo
+      if (e.ctrlKey && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          history.redo();
+        } else {
+          history.undo();
+        }
+        return;
+      }
+      if (e.ctrlKey && key === 'y') {
+        e.preventDefault();
+        history.redo();
+        return;
+      }
+
+      // Save
+      if (e.ctrlKey && key === 's') {
+        e.preventDefault();
+        handleSaveProject();
+        return;
+      }
+
+      // Duplicate
+      if (e.shiftKey && key === 'd') {
+        e.preventDefault();
+        handleDuplicateSelected();
+        return;
+      }
+
+      // Delete
+      if (e.key === 'Delete' || key === 'x') {
+        e.preventDefault();
+        handleDeleteSelected();
+        return;
+      }
+
+      // Transform Modes
+      if (key === 'g') {
+        setTransformMode('translate');
+      } else if (key === 'r') {
+        setTransformMode('rotate');
+      } else if (key === 's') {
+        setTransformMode('scale');
+      } else if (key === 'q') {
+        setTransformMode('select');
+      }
+
+      // Playback Spacebar
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setTimelineState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }));
+      }
+
+      // Step Frames
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setTimelineState((prev) => ({ ...prev, currentFrame: 0 }));
+        } else {
+          setTimelineState((prev) => ({ ...prev, currentFrame: Math.max(0, prev.currentFrame - 1) }));
+        }
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          setTimelineState((prev) => ({ ...prev, currentFrame: prev.totalFrames }));
+        } else {
+          setTimelineState((prev) => ({
+            ...prev,
+            currentFrame: Math.min(prev.totalFrames, prev.currentFrame + 1),
+          }));
+        }
+      }
+
+      // Numpad Views
+      if (e.code === 'Numpad1') {
+        setCameraView('front');
+      } else if (e.code === 'Numpad3') {
+        setCameraView('right');
+      } else if (e.code === 'Numpad7') {
+        setCameraView('top');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleDuplicateSelected, handleDeleteSelected]);
+
+  const selectedItem = sceneItems.find((it) => it.id === selectedId) || null;
+  const activeTrack = tracks.find((t) => t.objectId === selectedId);
+
+  return (
+    <div className="flex flex-col h-screen w-screen bg-studio-950 text-slate-100 select-none overflow-hidden font-sans">
+      {/* Top Navigation Bar */}
+      <TopNavbar
+        canUndo={history.canUndo()}
+        canRedo={history.canRedo()}
+        onUndo={() => history.undo()}
+        onRedo={() => history.redo()}
+        onAddPrimitive={handleAddPrimitive}
+        onDeleteSelected={handleDeleteSelected}
+        onDuplicateSelected={handleDuplicateSelected}
+        onNewScene={handleNewScene}
+        onSaveProject={handleSaveProject}
+        onOpenProject={handleOpenProject}
+        onExportGLTF={handleExportGLTF}
+        onExportOBJ={handleExportOBJ}
+        onExportSTL={handleExportSTL}
+        onCaptureSnapshot={handleCaptureSnapshot}
+        shadingMode={shadingMode}
+        onChangeShadingMode={setShadingMode}
+        cameraView={cameraView}
+        onChangeCameraView={setCameraView}
+        onOpenShortcuts={() => setIsShortcutsOpen(true)}
+      />
+
+      {/* Main Workspace Row: Toolbar + Viewport + Inspector */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Toolbar */}
+        <LeftToolbar
+          transformMode={transformMode}
+          onChangeTransformMode={setTransformMode}
+          onAddPrimitive={handleAddPrimitive}
+          onApplyNoiseSculpt={() => selectedId && handleAddModifier(selectedId, 'noise_displace')}
+          onSubdivideSelected={() => selectedId && handleAddModifier(selectedId, 'subdivide')}
+          hasSelectedObject={!!selectedId}
+        />
+
+        {/* 3D Viewport */}
+        <Viewport
+          engineRef={engineRef}
+          containerRef={containerRef}
+          stats={stats}
+          cameraView={cameraView}
+          transformMode={transformMode}
+          selectedObjectName={selectedItem ? selectedItem.name : null}
+          onResetCamera={() => engineRef.current?.setCameraView('perspective')}
+          onFocusSelected={() => {
+            if (selectedItem && engineRef.current) {
+              engineRef.current.orbitControls.target.set(
+                selectedItem.transform.position[0],
+                selectedItem.transform.position[1],
+                selectedItem.transform.position[2]
+              );
+              engineRef.current.orbitControls.update();
+            }
+          }}
+          onChangeCameraView={setCameraView}
+        />
+
+        {/* Right Inspector */}
+        <RightInspector
+          sceneItems={sceneItems}
+          selectedItem={selectedItem}
+          environment={environment}
+          onSelectObject={setSelectedId}
+          onUpdateTransform={handleUpdateTransform}
+          onUpdateMaterial={handleUpdateMaterial}
+          onUpdateEnvironment={setEnvironment}
+          onToggleVisibility={(id) =>
+            setSceneItems((prev) =>
+              prev.map((it) => (it.id === id ? { ...it, visible: !it.visible } : it))
+            )
+          }
+          onToggleLock={(id) =>
+            setSceneItems((prev) =>
+              prev.map((it) => (it.id === id ? { ...it, locked: !it.locked } : it))
+            )
+          }
+          onRenameObject={(id, newName) =>
+            setSceneItems((prev) =>
+              prev.map((it) => (it.id === id ? { ...it, name: newName } : it))
+            )
+          }
+          onDeleteObject={(id) => {
+            setSelectedId(id);
+            handleDeleteSelected();
+          }}
+          onAddModifier={handleAddModifier}
+          onUpdateModifierFactor={handleUpdateModifierFactor}
+          onToggleModifier={handleToggleModifier}
+          onDeleteModifier={handleDeleteModifier}
+        />
+      </div>
+
+      {/* Bottom Animation Timeline */}
+      <Timeline
+        timelineState={timelineState}
+        keyframes={activeTrack?.keyframes || []}
+        selectedObjectId={selectedId}
+        onSetFrame={(f) => setTimelineState((prev) => ({ ...prev, currentFrame: f }))}
+        onTogglePlay={() => setTimelineState((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))}
+        onToggleLoop={() => setTimelineState((prev) => ({ ...prev, isLooping: !prev.isLooping }))}
+        onToggleAutoKey={() =>
+          setTimelineState((prev) => ({ ...prev, autoKeying: !prev.autoKeying }))
+        }
+        onAddKeyframe={handleAddKeyframe}
+        onRemoveKeyframe={handleRemoveKeyframe}
+        onGenerateTurntable={handleGenerateTurntable}
+        onChangeFps={(fps) => setTimelineState((prev) => ({ ...prev, fps }))}
+        onChangeTotalFrames={(total) =>
+          setTimelineState((prev) => ({ ...prev, totalFrames: total }))
+        }
+      />
+
+      {/* Keyboard Shortcuts Dialog */}
+      <KeyboardShortcutsModal
+        isOpen={isShortcutsOpen}
+        onClose={() => setIsShortcutsOpen(false)}
+      />
+    </div>
+  );
+};
+
+export default App;
