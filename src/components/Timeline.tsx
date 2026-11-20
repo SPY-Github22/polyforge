@@ -72,14 +72,16 @@ export const Timeline: React.FC<TimelineProps> = ({
           <button
             onClick={() => onSetFrame(0)}
             title="Jump to Start (Shift+Left)"
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
+            aria-label="Jump to Start"
+            className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
           >
             <SkipBack size={14} />
           </button>
           <button
             onClick={() => onSetFrame(Math.max(0, currentFrame - 1))}
             title="Step Back 1 Frame (Left)"
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
+            aria-label="Step Back 1 Frame"
+            className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
           >
             <ChevronLeft size={16} />
           </button>
@@ -87,6 +89,7 @@ export const Timeline: React.FC<TimelineProps> = ({
           <button
             onClick={onTogglePlay}
             title="Play / Pause (Space)"
+            aria-label={isPlaying ? "Pause animation" : "Play animation"}
             className="w-7 h-7 rounded-full bg-studio-accent text-white flex items-center justify-center hover:bg-blue-600 transition shadow-md shadow-blue-500/20"
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
@@ -95,14 +98,16 @@ export const Timeline: React.FC<TimelineProps> = ({
           <button
             onClick={() => onSetFrame(Math.min(totalFrames, currentFrame + 1))}
             title="Step Forward 1 Frame (Right)"
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
+            aria-label="Step Forward 1 Frame"
+            className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
           >
             <ChevronRight size={16} />
           </button>
           <button
             onClick={() => onSetFrame(totalFrames)}
             title="Jump to End (Shift+Right)"
-            className="p-1 rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
+            aria-label="Jump to End"
+            className="w-7 h-7 flex items-center justify-center rounded text-slate-400 hover:text-white hover:bg-studio-800 transition"
           >
             <SkipForward size={14} />
           </button>

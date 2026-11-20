@@ -83,7 +83,9 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-studio-800 text-slate-400 hover:text-white transition"
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-studio-800 text-slate-400 hover:text-white transition"
+            title="Close shortcuts modal"
+            aria-label="Close shortcuts modal"
           >
             <X size={18} />
           </button>

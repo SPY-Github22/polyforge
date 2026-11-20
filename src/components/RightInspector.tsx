@@ -272,26 +272,29 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                     <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => onToggleVisibility(item.id)}
-                        className="p-1 hover:text-white text-slate-500"
-                        title={item.visible ? 'Hide' : 'Show'}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:text-white text-slate-400 hover:bg-studio-800 transition"
+                        title={item.visible ? 'Hide Object' : 'Show Object'}
+                        aria-label={item.visible ? 'Hide Object' : 'Show Object'}
                       >
-                        {item.visible ? <Eye size={13} /> : <EyeOff size={13} className="text-red-400" />}
+                        {item.visible ? <Eye size={14} /> : <EyeOff size={14} className="text-red-400" />}
                       </button>
 
                       <button
                         onClick={() => onToggleLock(item.id)}
-                        className="p-1 hover:text-white text-slate-500"
-                        title={item.locked ? 'Unlock' : 'Lock'}
+                        className="w-6 h-6 flex items-center justify-center rounded hover:text-white text-slate-400 hover:bg-studio-800 transition"
+                        title={item.locked ? 'Unlock Object' : 'Lock Object'}
+                        aria-label={item.locked ? 'Unlock Object' : 'Lock Object'}
                       >
-                        {item.locked ? <Lock size={13} className="text-amber-400" /> : <Unlock size={13} />}
+                        {item.locked ? <Lock size={14} className="text-amber-400" /> : <Unlock size={14} />}
                       </button>
 
                       <button
                         onClick={() => onDeleteObject(item.id)}
-                        className="p-1 hover:text-red-400 text-slate-500"
-                        title="Delete"
+                        className="w-6 h-6 flex items-center justify-center rounded hover:text-red-400 text-slate-400 hover:bg-studio-800 transition"
+                        title="Delete Object"
+                        aria-label="Delete Object"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>

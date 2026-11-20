@@ -253,8 +253,9 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-studio-800 transition"
+          className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-200 hover:bg-studio-800 transition"
           title="Close AI Assistant"
+          aria-label="Close AI Assistant"
         >
           <X className="w-4 h-4" />
         </button>
