@@ -11,9 +11,12 @@ import {
   AIExecutionResult,
   CreateObjectOptions,
   PolyForgeScriptAPI,
+  ProceduralGenerationResult,
+  ProceduralTemplateId,
   UpdateObjectOptions,
 } from './types';
 import { insertOrUpdateKeyframe } from '../animation';
+import { PROCEDURAL_TEMPLATES } from './procedural';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -54,7 +57,7 @@ export function createPolyForgeScriptAPI(
   const api: PolyForgeScriptAPI = {
     createObject: (options: CreateObjectOptions): SceneItem => {
       const type = options.primitive || 'box';
-      const id = `ai-${type}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+      const id = options.id || `ai-${type}-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
       const name = options.name || `${type.charAt(0).toUpperCase() + type.slice(1)} ${context.items.length + 1}`;
 
       const pos: [number, number, number] = options.position || [0, 0, 0];
@@ -123,6 +126,10 @@ export function createPolyForgeScriptAPI(
       };
 
       context.items[idx] = updated;
+      const createdIdx = createdItems.findIndex((it) => it.id === updated.id);
+      if (createdIdx !== -1) {
+        createdItems[createdIdx] = updated;
+      }
       updatedItems.push(updated);
       return updated;
     },
@@ -133,6 +140,10 @@ export function createPolyForgeScriptAPI(
 
       const [removed] = context.items.splice(idx, 1);
       deletedItemIds.push(removed.id);
+      const createdIdx = createdItems.findIndex((it) => it.id === removed.id);
+      if (createdIdx !== -1) {
+        createdItems.splice(createdIdx, 1);
+      }
 
       // Clean up associated animation tracks
       context.tracks = context.tracks.filter((t) => t.objectId !== removed.id);
@@ -154,7 +165,40 @@ export function createPolyForgeScriptAPI(
         deletedItemIds.push(it.id);
       }
       context.items = [];
+      createdItems.length = 0;
       context.tracks = [];
+    },
+
+    addModifier: (
+      idOrName: string,
+      modifier: {
+        type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+        factor: number;
+        enabled?: boolean;
+      }
+    ): boolean => {
+      const idx = findItemIndex(idOrName);
+      if (idx === -1) {
+        logs.push(`[Warn] addModifier: object "${idOrName}" not found.`);
+        return false;
+      }
+
+      const item = context.items[idx];
+      const modId = `mod-${item.id}-${(item.modifiers || []).length + 1}`;
+      const newMod = {
+        id: modId,
+        type: modifier.type,
+        factor: modifier.factor,
+        enabled: modifier.enabled !== undefined ? modifier.enabled : true,
+      };
+
+      item.modifiers = [...(item.modifiers || []), newMod];
+      const createdIdx = createdItems.findIndex((it) => it.id === item.id);
+      if (createdIdx !== -1) {
+        createdItems[createdIdx] = item;
+      }
+      updatedItems.push(item);
+      return true;
     },
 
     addKeyframe: (
@@ -240,6 +284,57 @@ export function createPolyForgeScriptAPI(
       return { ...context.environment };
     },
 
+    listTemplates: () => {
+      return Object.values(PROCEDURAL_TEMPLATES).map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        description: t.description,
+        tags: t.tags,
+      }));
+    },
+
+    generateTemplate: (
+      templateId: ProceduralTemplateId,
+      options?: { clearScene?: boolean }
+    ): ProceduralGenerationResult | null => {
+      const template = PROCEDURAL_TEMPLATES[templateId];
+      if (!template) {
+        logs.push(`[Warn] generateTemplate: template "${templateId}" not found.`);
+        return null;
+      }
+
+      if (options?.clearScene) {
+        api.clearScene();
+      }
+
+      const result = template.generate();
+
+      for (const item of result.items) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+
+      for (const track of result.tracks) {
+        const existingIdx = context.tracks.findIndex((t) => t.objectId === track.objectId);
+        if (existingIdx !== -1) {
+          context.tracks[existingIdx] = track;
+        } else {
+          context.tracks.push(track);
+        }
+      }
+
+      if (result.environment) {
+        context.environment = { ...context.environment, ...result.environment };
+      }
+      if (result.timeline) {
+        context.timeline = { ...context.timeline, ...result.timeline };
+      }
+
+      logs.push(`[Template] Instantiated "${template.name}" with ${result.items.length} objects and ${result.tracks.length} tracks.`);
+      return result;
+    },
+
     log: (...args: any[]): void => {
       const message = args
         .map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a)))
@@ -257,7 +352,8 @@ export function createPolyForgeScriptAPI(
  */
 export async function executePolyForgeScript(
   code: string,
-  initialContext: ScriptExecutionContext
+  initialContext: ScriptExecutionContext,
+  options?: { timeoutMs?: number }
 ): Promise<AIExecutionResult> {
   const clonedContext: ScriptExecutionContext = {
     items: JSON.parse(JSON.stringify(initialContext.items)),
@@ -279,22 +375,45 @@ export async function executePolyForgeScript(
     deletedItemIds
   );
 
+  const consoleShim = {
+    log: (...args: any[]) => api.log(...args),
+    warn: (...args: any[]) => api.log('[Warn]', ...args),
+    error: (...args: any[]) => api.log('[Error]', ...args),
+    info: (...args: any[]) => api.log('[Info]', ...args),
+  };
+
+  const timeoutMs = options?.timeoutMs ?? 5000;
+
   try {
     // Wrap script inside an async function to allow await
-    // Provide polyforge and standard math utilities
+    // Provide polyforge, standard Math utilities, and console
     const wrappedCode = `
-      return (async function(polyforge, Math) {
+      return (async function(polyforge, Math, console) {
         "use strict";
         ${code}
-      })(api, Math);
+      })(api, Math, consoleShim);
     `;
 
-    const runner = new Function('api', wrappedCode);
-    await runner(api);
+    const runner = new Function('api', 'Math', 'consoleShim', wrappedCode);
+    const executionPromise = runner(api, Math, consoleShim);
+
+    let timer: any;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`Script execution timed out (${timeoutMs}ms limit)`));
+      }, timeoutMs);
+    });
+
+    try {
+      await Promise.race([executionPromise, timeoutPromise]);
+    } finally {
+      clearTimeout(timer);
+    }
 
     return {
       success: true,
       logs,
+      items: clonedContext.items,
       createdItems,
       updatedItems,
       deletedItemIds,
@@ -309,6 +428,7 @@ export async function executePolyForgeScript(
       success: false,
       logs,
       error: errorMsg,
+      items: initialContext.items,
       createdItems: [],
       updatedItems: [],
       deletedItemIds: [],

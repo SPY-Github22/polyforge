@@ -4,13 +4,18 @@
   "version": "1.0.0",
   "description": "PolyForge Studio - Modern 3D Modeling, Rigging, & Keyframe Animation Suite",
   "type": "module",
+  "bin": {
+    "polyforge": "./cli/polyforge-agent.ts",
+    "polyforge-mcp": "./cli/polyforge-mcp.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "polyforge": "tsx cli/polyforge-agent.ts"
+    "polyforge": "tsx cli/polyforge-agent.ts",
+    "polyforge-mcp": "tsx cli/polyforge-mcp.ts"
   },
   "keywords": [
     "3d-modeling",

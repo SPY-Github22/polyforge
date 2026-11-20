@@ -128,21 +128,11 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
       if (result.success) {
         setConsoleLogs((prev) => [
           ...prev,
-          `[Success] Script executed. Items in scene: ${result.createdItems.length + sceneItems.length - result.deletedItemIds.length}`,
+          `[Success] Script executed. Items in scene: ${result.items.length}`,
         ]);
 
-        // Construct final scene array
-        const deletedSet = new Set(result.deletedItemIds);
-        const updatedMap = new Map(result.updatedItems.map((it) => [it.id, it]));
-
-        let finalItems = sceneItems
-          .filter((it) => !deletedSet.has(it.id))
-          .map((it) => (updatedMap.has(it.id) ? updatedMap.get(it.id)! : it));
-
-        finalItems = [...finalItems, ...result.createdItems];
-
         onApplySceneUpdate(
-          finalItems,
+          result.items,
           result.tracks,
           result.environment,
           result.timeline,
@@ -221,9 +211,22 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
       timelineState
     );
 
-    navigator.clipboard.writeText(fullPrompt);
-    setIsCopied(true);
-    setTimeout(() => setIsCopied(false), 2000);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(fullPrompt);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = fullPrompt;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.warn('Clipboard write failed:', err);
+    }
   };
 
   // Execute pasted code from external LLM
@@ -550,6 +553,23 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
               </button>
             </div>
 
+            {/* Model Context Protocol (MCP) Integration */}
+            <div className="p-3 rounded-lg bg-studio-950/80 border border-sky-900/40 text-[11px] text-slate-400 space-y-2 font-mono">
+              <div className="text-sky-300 font-semibold font-sans flex items-center space-x-1.5">
+                <Bot className="w-3.5 h-3.5 text-sky-400" />
+                <span>Model Context Protocol (MCP) Integration</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-sans">
+                Connect LLM agents (Claude Desktop, Cursor, Antigravity, Cline) via MCP to create objects and animations:
+              </p>
+              <div className="p-2 rounded bg-black/60 text-sky-300 text-[10px] select-all whitespace-pre overflow-x-auto">
+{`"polyforge": {
+  "command": "npm",
+  "args": ["run", "polyforge-mcp"]
+}`}
+              </div>
+            </div>
+
             {/* Headless CLI Instructions */}
             <div className="p-3 rounded-lg bg-studio-950/80 border border-studio-800 text-[11px] text-slate-400 space-y-2 font-mono">
               <div className="text-sky-300 font-semibold font-sans flex items-center space-x-1.5">
@@ -557,7 +577,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                 <span>Headless Terminal Agent Execution</span>
               </div>
               <p className="text-[10px] text-slate-400 font-sans">
-                Agents running in shell can execute scripts, generate models, and export GLTF/OBJ directly from the command line:
+                Agents running in shell can execute scripts, generate models, and export OBJ/STL directly:
               </p>
               <div className="p-2 rounded bg-black/60 text-sky-300 text-[10px] select-all">
                 npx tsx cli/polyforge-agent.ts generate --template sci-fi-citadel --out model.json

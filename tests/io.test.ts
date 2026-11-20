@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseProjectFile, ProjectSaveData } from '../src/core/io';
+import {
+  parseProjectFile,
+  ProjectSaveData,
+  exportSceneToOBJString,
+  exportSceneToSTLString,
+  buildThreeGroupFromItems,
+} from '../src/core/io';
 import { SceneItem, AnimationTrack, EnvironmentSettings } from '../src/types';
 
 describe('Project IO and Serialization', () => {
@@ -100,5 +106,45 @@ describe('Project IO and Serialization', () => {
 
   it('throws clear syntax error on malformed JSON string', () => {
     expect(() => parseProjectFile('{ broken json: ')).toThrow('Corrupted JSON file');
+  });
+
+  it('exports SceneItem array to valid Wavefront OBJ and STL strings headlessly', () => {
+    const testItems: SceneItem[] = [
+      {
+        id: 'box-1',
+        name: 'Export Box',
+        type: 'mesh',
+        primitiveType: 'box',
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        material: {
+          color: '#388bfd',
+          roughness: 0.35,
+          metalness: 0.2,
+          emissive: '#000000',
+          emissiveIntensity: 0,
+          transmission: 0,
+          opacity: 1,
+          transparent: false,
+          wireframe: false,
+          texturePreset: 'none',
+        },
+        visible: true,
+        locked: false,
+        modifiers: [],
+      },
+    ];
+
+    const threeGroup = buildThreeGroupFromItems(testItems);
+    expect(threeGroup.children.length).toBe(1);
+
+    const objString = exportSceneToOBJString(testItems);
+    expect(objString).toContain('v ');
+    expect(objString).toContain('f ');
+    expect(objString.length).toBeGreaterThan(100);
+
+    const stlString = exportSceneToSTLString(testItems);
+    expect(stlString.toLowerCase()).toContain('solid');
+    expect(stlString.toLowerCase()).toContain('facet');
+    expect(stlString.length).toBeGreaterThan(100);
   });
 });

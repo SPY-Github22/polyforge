@@ -54,8 +54,36 @@ polyforge.addKeyframe(ring.id, 0, { rotation: [Math.PI / 2, 0, 0] }, 'linear');
 polyforge.addKeyframe(ring.id, 120, { rotation: [Math.PI / 2, Math.PI * 2, 0] }, 'linear');
 ```
 
-### 3. 🖥️ Headless Terminal CLI for Autonomous Agents
-Terminal agents and CI/CD pipelines can generate, script, and inspect 3D scenes without opening a browser:
+### 3. 🔌 Model Context Protocol (MCP) Server for LLM Agents
+PolyForge provides a standard **Model Context Protocol (MCP)** server over stdio, enabling AI assistants (Claude Desktop, Cursor, Antigravity, Cline, Windsurf) to natively create, modify, inspect, and animate 3D scenes:
+
+```json
+// Add to your Claude Desktop / Cursor / Agent MCP configuration:
+{
+  "mcpServers": {
+    "polyforge": {
+      "command": "npx",
+      "args": ["tsx", "/path/to/polyforge/cli/polyforge-mcp.ts"]
+    }
+  }
+}
+```
+
+Available MCP Tools for LLMs:
+- `polyforge_list_templates`: Enumerate all built-in procedural generators.
+- `polyforge_generate_template`: Synthesize a complete 3D scene from a template.
+- `polyforge_create_object`: Programmatically create primitives with custom PBR materials and modifiers.
+- `polyforge_update_object`: Modify existing objects (position, rotation, scale, material).
+- `polyforge_delete_object`: Remove objects and associated animation tracks.
+- `polyforge_add_keyframe`: Add precise animation keyframes with linear or ease-in-out curves.
+- `polyforge_execute_script`: Execute arbitrary JavaScript 3D procedural scripts.
+- `polyforge_export_scene`: Export scene to Wavefront OBJ, STL, or PolyForge JSON.
+- `polyforge_get_scene`: Inspect token-efficient scene topology and tracks.
+- `polyforge_clear_scene`: Reset the scene.
+- `polyforge_get_api_docs`: Retrieve complete scripting API documentation.
+
+### 4. 🖥️ Headless Terminal CLI for Autonomous Agents
+Terminal agents and CI/CD pipelines can generate, script, export, and inspect 3D scenes without opening a browser:
 ```bash
 # List all built-in procedural templates
 npm run polyforge -- list-templates
@@ -66,14 +94,21 @@ npm run polyforge -- generate --template kinetic-mech --out ./mech.json
 # Synthesize a model directly from a natural language prompt
 npm run polyforge -- prompt "solar system orrery with planets" --out ./system.json
 
-# Execute a custom JavaScript script in headless sandbox
-npm run polyforge -- run-script ./my-script.js --out ./output.json
+# Execute a custom JavaScript script in headless sandbox (or modify an existing scene)
+npm run polyforge -- run-script ./my-script.js --scene ./base.json --out ./output.json
+
+# Export a scene to Wavefront OBJ or STL for 3D printing and game engines
+npm run polyforge -- export ./mech.json --format obj --out ./mech.obj
+npm run polyforge -- export ./mech.json --format stl --out ./mech.stl
 
 # Inspect an existing scene's objects, materials, and animation tracks
 npm run polyforge -- inspect ./system.json
+
+# Launch the Model Context Protocol stdio server
+npm run polyforge-mcp
 ```
 
-### 4. 🏛️ Flagship Deeply Architected Procedural Templates
+### 5. 🏛️ Flagship Deeply Architected Procedural Templates
 | Template ID | Name | Category | Description |
 | :--- | :--- | :--- | :--- |
 | `sci-fi-citadel` | Cyberpunk Citadel | Sci-Fi | Soaring spire, counter-rotating levitation rings, quantum core, and pulsing beacon |

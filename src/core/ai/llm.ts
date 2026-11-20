@@ -55,16 +55,23 @@ export function getSystemPromptForLLM(): string {
 You produce clean, valid JavaScript code using the global \`polyforge\` API to construct 3D scenes, mathematical shapes, and precise animations.
 
 ### PolyForge API Reference:
-- \`polyforge.createObject({ name, primitive, position: [x,y,z], rotation: [rx,ry,rz], scale: [sx,sy,sz], material: { color, roughness, metalness, emissive, emissiveIntensity, transmission, opacity, transparent, wireframe }, modifiers: [{ type: 'subdivide' | 'noise_displace' | 'twist', factor }] })\`
+- \`polyforge.createObject({ id, name, primitive, position: [x,y,z], rotation: [rx,ry,rz], scale: [sx,sy,sz], material: { color, roughness, metalness, emissive, emissiveIntensity, transmission, opacity, transparent, wireframe }, modifiers: [{ type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth', factor }], geometryParams: { width, height, depth, radius, tube, radialSegments, tubularSegments } })\`
   - Valid primitives: 'box', 'sphere', 'cylinder', 'cone', 'torus', 'plane', 'dodecahedron', 'capsule'.
-- \`polyforge.updateObject(idOrName, { position, rotation, scale, material })\`
+- \`polyforge.addModifier(idOrName, { type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth', factor })\`
+- \`polyforge.updateObject(idOrName, { position, rotation, scale, material, visible, locked })\`
 - \`polyforge.deleteObject(idOrName)\`
 - \`polyforge.getObject(idOrName)\`
 - \`polyforge.getAllObjects()\`
 - \`polyforge.clearScene()\`
-- \`polyforge.addKeyframe(idOrName, frameNumber, { position, rotation, scale }, interpolation = 'ease-in-out' | 'linear')\`
-- \`polyforge.setEnvironment({ preset: 'studio' | 'sunset' | 'cyberpunk' | 'dawn', backgroundColor, ambientIntensity, directionalIntensity })\`
+- \`polyforge.addKeyframe(idOrName, frameNumber, { position, rotation, scale }, interpolation = 'ease-in-out' | 'linear' | 'step')\`
+- \`polyforge.setAnimationTrack(idOrName, keyframes)\`
+- \`polyforge.getAnimationTrack(idOrName)\`
+- \`polyforge.clearAnimation(idOrName)\`
+- \`polyforge.setEnvironment({ preset: 'studio' | 'sunset' | 'cyberpunk' | 'dawn', backgroundColor, ambientIntensity, directionalIntensity, showGrid, showAxes })\`
 - \`polyforge.setTimeline({ totalFrames: 120, fps: 30 })\`
+- \`polyforge.listTemplates()\`
+- \`polyforge.generateTemplate(templateId, { clearScene: true })\`
+  - Built-in templates: 'sci-fi-citadel', 'solar-orrery', 'castle-fortress', 'kinetic-mech', 'dna-helix', 'procedural-biome', 'spiral-pavilion'.
 - \`polyforge.log(message)\`
 
 ### Guidelines:
@@ -103,19 +110,27 @@ Please write the complete JavaScript code to fulfill this request. Output ONLY t
  * Robustly extracts executable JavaScript code from LLM text responses.
  */
 export function extractCodeFromLLMResponse(responseText: string): string {
-  // Check for ```javascript or ```js code blocks
-  const jsMatch = responseText.match(/```(?:javascript|js|ts|typescript)?\s*([\s\S]*?)```/i);
+  // Decode common HTML entities that LLMs or web views might inject
+  let cleaned = responseText
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+
+  // Check for ```javascript, ```js, ```typescript, or ```ts code blocks
+  const jsMatch = cleaned.match(/```(?:javascript|js|ts|typescript)?\s*([\s\S]*?)```/i);
   if (jsMatch && jsMatch[1].trim()) {
     return jsMatch[1].trim();
   }
 
   // If no markdown fence, check if raw response looks like script code
-  const trimmed = responseText.trim();
+  const trimmed = cleaned.trim();
   if (trimmed.includes('polyforge.') || trimmed.includes('const ') || trimmed.includes('for (')) {
     return trimmed;
   }
 
-  return responseText.trim();
+  return cleaned.trim();
 }
 
 /**
@@ -135,39 +150,17 @@ export async function callAIProvider(
   // 1. OFFLINE PROCEDURAL ENGINE
   if (config.provider === 'offline' || !config.apiKey) {
     const matched = matchProceduralTemplate(userPrompt);
-    // Convert procedural template generation into equivalent reproducible script code
-    const generatedScript = `
-// PolyForge Procedural AI Engine: Generated from "${matched.name}"
+    const genResult = matched.generate();
+
+    const generatedScript = `// PolyForge Procedural AI Engine: Generated from "${matched.name}"
 // Description: ${matched.description}
+// Category: ${matched.category} | Prompt: "${userPrompt.replace(/"/g, '\\"')}"
 
 polyforge.clearScene();
-polyforge.setEnvironment(${JSON.stringify(matched.generate().environment || {})});
-polyforge.setTimeline(${JSON.stringify(matched.generate().timeline || {})});
-
-const template = PROCEDURAL_TEMPLATES["${matched.id}"];
-const result = template.generate();
-
-for (const item of result.items) {
-  polyforge.createObject({
-    name: item.name,
-    primitive: item.primitiveType,
-    position: item.transform.position,
-    rotation: item.transform.rotation,
-    scale: item.transform.scale,
-    material: item.material,
-    modifiers: item.modifiers,
-    geometryParams: item.geometryParams
-  });
-}
-
-for (const track of result.tracks) {
-  for (const kf of track.keyframes) {
-    polyforge.addKeyframe(track.objectId, kf.frame, kf.transform, kf.interpolation);
-  }
-}
-
-polyforge.log("Successfully generated ${matched.name} with " + result.items.length + " objects and " + result.tracks.length + " animation tracks.");
+polyforge.generateTemplate("${matched.id}");
+polyforge.log("Successfully synthesized ${matched.name} with ${genResult.items.length} objects and ${genResult.tracks.length} animation tracks.");
 `;
+
     return {
       code: generatedScript,
       explanation: `Synthesized "${matched.name}" (${matched.description}) using PolyForge Offline Generative AI.`,

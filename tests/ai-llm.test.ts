@@ -6,6 +6,7 @@ import {
   extractCodeFromLLMResponse,
   callAIProvider,
 } from '../src/core/ai/llm';
+import { executePolyForgeScript } from '../src/core/ai/api';
 import { EnvironmentSettings, SceneItem, TimelineState } from '../src/types';
 
 describe('LLM Scene Serialization & Provider Bridge', () => {
@@ -111,7 +112,19 @@ Enjoy your model!
     );
 
     expect(result.code).toContain('polyforge.clearScene()');
-    expect(result.code).toContain('PROCEDURAL_TEMPLATES["sci-fi-citadel"]');
+    expect(result.code).toContain('polyforge.generateTemplate("sci-fi-citadel")');
     expect(result.isProceduralFallback).toBe(true);
+
+    // Verify that the generated code actually executes successfully in PolyForge runtime
+    const execResult = await executePolyForgeScript(result.code, {
+      items: [],
+      tracks: [],
+      environment: dummyEnv,
+      timeline: dummyTimeline,
+    });
+    expect(execResult.success).toBe(true);
+    expect(execResult.items.length).toBeGreaterThan(0);
+    expect(execResult.tracks.length).toBeGreaterThan(0);
+    expect(execResult.logs.some((l) => l.includes('Cyberpunk Citadel'))).toBe(true);
   });
 });

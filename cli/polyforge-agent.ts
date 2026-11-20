@@ -4,6 +4,8 @@ import path from 'path';
 import { PROCEDURAL_TEMPLATES, matchProceduralTemplate } from '../src/core/ai/procedural';
 import { ProceduralTemplateId } from '../src/core/ai/types';
 import { executePolyForgeScript } from '../src/core/ai/api';
+import { exportSceneToOBJString, exportSceneToSTLString, parseProjectFile } from '../src/core/io';
+import { PolyForgeMCPServer } from './polyforge-mcp';
 import { EnvironmentSettings, TimelineState } from '../src/types';
 
 const defaultEnv: EnvironmentSettings = {
@@ -27,23 +29,27 @@ const defaultTimeline: TimelineState = {
 
 function printHelp() {
   console.log(`
-PolyForge AI Headless Agent CLI
-================================
-Programmatic 3D scene generation, scripting, and inspection interface for LLMs and automated workflows.
+PolyForge AI Headless Agent CLI & MCP Engine
+============================================
+Programmatic 3D scene generation, scripting, inspection, and Model Context Protocol interface.
 
 Usage:
   npx tsx cli/polyforge-agent.ts <command> [options]
 
 Commands:
-  list-templates                         List all built-in procedural 3D model and animation generators
-  generate --template <id> [--out <f>]   Synthesize a 3D model from a template ID and export PolyForge JSON
-  prompt "<natural language>" [--out <f>] Synthesize a 3D model matching a prompt and export PolyForge JSON
-  run-script <script.js> [--out <f>]     Execute a PolyForge JavaScript script in headless sandbox
-  inspect <scene.json>                   Display detailed summary and metrics of a scene file
+  list-templates                                          List all built-in procedural 3D model generators
+  generate --template <id> [--out <f>]                    Synthesize a 3D model from a template ID
+  prompt "<natural language>" [--out <f>]                  Synthesize a 3D model matching a prompt
+  run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
+  export <scene.json> --format <obj|stl|json> [--out <f>] Export a scene to 3D geometry formats
+  inspect <scene.json>                                    Display detailed summary and metrics of a scene file
+  mcp                                                     Launch the Model Context Protocol stdio server
 
 Options:
-  --out, -o <file>   Output JSON file path (defaults to stdout or ./polyforge-output.json)
-  --help, -h         Show this help screen
+  --out, -o <file>        Output file path (defaults to ./polyforge-output.json or model format)
+  --format, -f <fmt>      Export format: obj, stl, or json
+  --scene, -s <file>      Input scene file to execute script against
+  --help, -h              Show this help screen
 `);
 }
 
@@ -65,6 +71,12 @@ async function main() {
   };
 
   switch (command) {
+    case 'mcp': {
+      const server = new PolyForgeMCPServer();
+      server.startStdio();
+      break;
+    }
+
     case 'list-templates': {
       console.log('\nAvailable Deeply Architected Templates:');
       console.log('---------------------------------------');
@@ -144,11 +156,29 @@ async function main() {
       const scriptCode = fs.readFileSync(scriptPath, 'utf-8');
       console.log(`[PolyForge Agent] Executing script: ${scriptPath}...`);
 
+      let initialItems: any[] = [];
+      let initialTracks: any[] = [];
+      let initialEnv = { ...defaultEnv };
+      let initialTimeline = { ...defaultTimeline };
+
+      const sceneFlag = getArgValue('--scene', '-s');
+      if (sceneFlag) {
+        if (!fs.existsSync(sceneFlag)) {
+          console.error(`Error: Input scene file not found: ${sceneFlag}`);
+          process.exit(1);
+        }
+        const sceneData = parseProjectFile(fs.readFileSync(sceneFlag, 'utf-8'));
+        initialItems = sceneData.items;
+        initialTracks = sceneData.tracks || [];
+        if (sceneData.environment) initialEnv = sceneData.environment;
+        console.log(`[PolyForge Agent] Loaded base scene from ${sceneFlag} with ${initialItems.length} objects.`);
+      }
+
       const execution = await executePolyForgeScript(scriptCode, {
-        items: [],
-        tracks: [],
-        environment: { ...defaultEnv },
-        timeline: { ...defaultTimeline },
+        items: initialItems,
+        tracks: initialTracks,
+        environment: initialEnv,
+        timeline: initialTimeline,
       });
 
       if (!execution.success) {
@@ -165,15 +195,47 @@ async function main() {
         generator: 'PolyForge Script Execution Engine',
         createdAt: new Date().toISOString(),
         environment: execution.environment || defaultEnv,
-        items: execution.createdItems,
+        items: execution.items,
         tracks: execution.tracks,
         timeline: execution.timeline ? { ...defaultTimeline, ...execution.timeline } : defaultTimeline,
       };
 
       const outPath = getArgValue('--out', '-o') || path.resolve(process.cwd(), 'script-output.json');
       fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
-      console.log(`[PolyForge Agent] Created ${execution.createdItems.length} objects and ${execution.tracks.length} animation tracks.`);
+      console.log(`[PolyForge Agent] Total objects in scene: ${execution.items.length}, animation tracks: ${execution.tracks.length}.`);
       console.log(`[PolyForge Agent] Saved to: ${outPath}`);
+      break;
+    }
+
+    case 'export': {
+      const filePath = args[1];
+      if (!filePath || !fs.existsSync(filePath)) {
+        console.error(`Error: Scene file not found: ${filePath}`);
+        process.exit(1);
+      }
+
+      const sceneData = parseProjectFile(fs.readFileSync(filePath, 'utf-8'));
+      const format = (getArgValue('--format', '-f') || 'obj').toLowerCase();
+      const defaultExt = format === 'stl' ? 'stl' : format === 'obj' ? 'obj' : 'json';
+      const outPath = getArgValue('--out', '-o') || path.resolve(process.cwd(), `${path.parse(filePath).name}.${defaultExt}`);
+
+      console.log(`[PolyForge Agent] Exporting ${sceneData.items.length} objects to ${format.toUpperCase()}...`);
+
+      if (format === 'obj') {
+        const objText = exportSceneToOBJString(sceneData.items);
+        fs.writeFileSync(outPath, objText, 'utf-8');
+        console.log(`[PolyForge Agent] Successfully exported OBJ (${objText.length} bytes) to: ${outPath}`);
+      } else if (format === 'stl') {
+        const stlText = exportSceneToSTLString(sceneData.items);
+        fs.writeFileSync(outPath, stlText, 'utf-8');
+        console.log(`[PolyForge Agent] Successfully exported STL (${stlText.length} bytes) to: ${outPath}`);
+      } else if (format === 'json') {
+        fs.writeFileSync(outPath, JSON.stringify(sceneData, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Successfully exported JSON to: ${outPath}`);
+      } else {
+        console.error(`Error: Unsupported export format: ${format}. Choose "obj", "stl", or "json".`);
+        process.exit(1);
+      }
       break;
     }
 

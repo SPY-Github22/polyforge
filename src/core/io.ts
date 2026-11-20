@@ -3,6 +3,8 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { SceneItem, AnimationTrack, EnvironmentSettings, MaterialProperties, Modifier } from '../types';
+import { createPrimitiveGeometry, applyModifiers } from './geometry';
+import { createMaterial } from './material';
 
 export interface ProjectSaveData {
   version: string;
@@ -34,6 +36,53 @@ const DEFAULT_ENVIRONMENT: EnvironmentSettings = {
   shadows: true,
   preset: 'studio',
 };
+
+/**
+ * Constructs a Three.js Object3D Group from an array of SceneItems.
+ * Works headlessly in Node.js without requiring a WebGL context or browser DOM.
+ */
+export function buildThreeGroupFromItems(items: SceneItem[]): THREE.Group {
+  const group = new THREE.Group();
+  for (const item of items) {
+    if (!item.visible) continue;
+    try {
+      const baseGeo = createPrimitiveGeometry(item.primitiveType || 'box', item.geometryParams);
+      const geoWithMods = applyModifiers(baseGeo, item.modifiers);
+      const mat = createMaterial(item.material, 'rendered');
+      const mesh = new THREE.Mesh(geoWithMods, mat);
+      mesh.name = item.name;
+      mesh.position.set(item.transform.position[0], item.transform.position[1], item.transform.position[2]);
+      mesh.rotation.set(item.transform.rotation[0], item.transform.rotation[1], item.transform.rotation[2]);
+      mesh.scale.set(item.transform.scale[0], item.transform.scale[1], item.transform.scale[2]);
+      group.add(mesh);
+    } catch (err) {
+      // Gracefully continue if an item fails geometry construction
+      console.warn(`[IO Warning] Failed to construct mesh for "${item.name}":`, err);
+    }
+  }
+  return group;
+}
+
+/**
+ * Headless export: converts SceneItem[] directly to a Wavefront OBJ string.
+ * Works in both browser and server/CLI environments.
+ */
+export function exportSceneToOBJString(items: SceneItem[]): string {
+  const group = buildThreeGroupFromItems(items);
+  const exporter = new OBJExporter();
+  return exporter.parse(group);
+}
+
+/**
+ * Headless export: converts SceneItem[] directly to an ASCII STL string.
+ * Works in both browser and server/CLI environments.
+ */
+export function exportSceneToSTLString(items: SceneItem[]): string {
+  const group = buildThreeGroupFromItems(items);
+  const exporter = new STLExporter();
+  const res = exporter.parse(group, { binary: false }) as string | DataView;
+  return typeof res === 'string' ? res : new TextDecoder().decode(res.buffer);
+}
 
 /**
  * Triggers a client-side browser file download for a Blob.

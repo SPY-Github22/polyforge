@@ -146,5 +146,76 @@ describe('AI Scripting Engine & API', () => {
     const res = await executePolyForgeScript(script, ctx);
     expect(res.success).toBe(true);
     expect(res.createdItems.length).toBe(5);
+    expect(res.items.length).toBe(5);
+  });
+
+  it('preserves custom IDs and synchronizes in-place updates', async () => {
+    const ctx = createTestContext();
+    const script = `
+      const obj = polyforge.createObject({
+        id: 'user-spire-01',
+        name: 'Custom Spire',
+        primitive: 'cylinder',
+        position: [0, 0, 0]
+      });
+      polyforge.updateObject('user-spire-01', {
+        position: [10, 20, 30]
+      });
+      polyforge.addModifier('user-spire-01', {
+        type: 'twist',
+        factor: 0.8
+      });
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBe(1);
+    expect(res.items[0].id).toBe('user-spire-01');
+    expect(res.items[0].transform.position).toEqual([10, 20, 30]);
+    expect(res.items[0].modifiers.length).toBe(1);
+    expect(res.items[0].modifiers[0].type).toBe('twist');
+    expect(res.createdItems[0].transform.position).toEqual([10, 20, 30]);
+  });
+
+  it('supports template generation directly within scripts', async () => {
+    const ctx = createTestContext();
+    const script = `
+      polyforge.clearScene();
+      const tmpls = polyforge.listTemplates();
+      polyforge.log('Found templates: ' + tmpls.length);
+      polyforge.generateTemplate('castle-fortress');
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBeGreaterThan(5);
+    expect(res.tracks.length).toBeGreaterThan(0);
+    expect(res.logs.some((l) => l.includes('Found templates: 7'))).toBe(true);
+  });
+
+  it('captures standard console.log output into execution logs', async () => {
+    const ctx = createTestContext();
+    const script = `
+      console.log('Synthesizing dynamic parametric lattice...');
+      console.warn('Grid boundary near edge');
+      polyforge.createObject({ name: 'Lattice Node' });
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.logs.some((l) => l.includes('Synthesizing dynamic parametric lattice...'))).toBe(true);
+    expect(res.logs.some((l) => l.includes('[Warn] Grid boundary near edge'))).toBe(true);
+  });
+
+  it('aborts hanging asynchronous scripts with execution timeout', async () => {
+    const ctx = createTestContext();
+    const hangingScript = `
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    `;
+
+    // Test with short 50ms timeout
+    const res = await executePolyForgeScript(hangingScript, ctx, { timeoutMs: 50 });
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('timed out');
   });
 });

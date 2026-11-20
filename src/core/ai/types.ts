@@ -19,6 +19,7 @@ export type ProceduralTemplateId =
   | 'spiral-pavilion';
 
 export interface CreateObjectOptions {
+  id?: string;
   name?: string;
   primitive?: PrimitiveType;
   position?: [number, number, number];
@@ -61,6 +62,14 @@ export interface PolyForgeScriptAPI {
   getObject: (idOrName: string) => SceneItem | null;
   getAllObjects: () => SceneItem[];
   clearScene: () => void;
+  addModifier: (
+    idOrName: string,
+    modifier: {
+      type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+      factor: number;
+      enabled?: boolean;
+    }
+  ) => boolean;
 
   // Animation & Keyframing
   addKeyframe: (
@@ -79,6 +88,19 @@ export interface PolyForgeScriptAPI {
   setEnvironment: (settings: Partial<EnvironmentSettings>) => void;
   getEnvironment: () => EnvironmentSettings;
 
+  // Procedural Templates
+  listTemplates: () => Array<{
+    id: ProceduralTemplateId;
+    name: string;
+    category: string;
+    description: string;
+    tags: string[];
+  }>;
+  generateTemplate: (
+    templateId: ProceduralTemplateId,
+    options?: { clearScene?: boolean }
+  ) => ProceduralGenerationResult | null;
+
   // Logging & Utilities
   log: (...args: any[]) => void;
 }
@@ -87,6 +109,7 @@ export interface AIExecutionResult {
   success: boolean;
   logs: string[];
   error?: string;
+  items: SceneItem[];
   createdItems: SceneItem[];
   updatedItems: SceneItem[];
   deletedItemIds: string[];
