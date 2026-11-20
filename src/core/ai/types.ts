@@ -22,7 +22,8 @@ export type ProceduralTemplateId =
   | 'dna-helix'
   | 'procedural-biome'
   | 'spiral-pavilion'
-  | 'realistic-bicycle';
+  | 'realistic-bicycle'
+  | 'realistic-human';
 
 export interface CreateObjectOptions {
   id?: string;

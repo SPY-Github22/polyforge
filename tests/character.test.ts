@@ -211,4 +211,89 @@ describe('Anatomical Character Engine (Realistic Human)', () => {
     expect(glbBuffer).toBeInstanceOf(ArrayBuffer);
     expect((glbBuffer as ArrayBuffer).byteLength).toBeGreaterThan(100000);
   });
+
+  it('verifies non-zero, unit-length, outward-facing normals across all sub-assemblies', () => {
+    const human = generateRealisticHumanScene();
+
+    for (const item of human.allItems) {
+      const geo = createPrimitiveGeometry(item.primitiveType || 'custom', item.geometryParams);
+      const norm = geo.getAttribute('normal') as THREE.BufferAttribute;
+      expect(norm).toBeDefined();
+
+      let zeroNormals = 0;
+      for (let i = 0; i < norm.count; i++) {
+        const nx = norm.getX(i);
+        const ny = norm.getY(i);
+        const nz = norm.getZ(i);
+        const len = Math.hypot(nx, ny, nz);
+        if (len < 1e-4) {
+          zeroNormals++;
+        } else {
+          // Unit length within tolerance
+          expect(Math.abs(len - 1.0)).toBeLessThan(0.01);
+        }
+      }
+      expect(zeroNormals).toBe(0);
+    }
+
+    // Verify outward-facing chest normals on body item
+    const bodyGeo = createPrimitiveGeometry(human.bodyItem.primitiveType || 'custom', human.bodyItem.geometryParams);
+    const pos = bodyGeo.getAttribute('position') as THREE.BufferAttribute;
+    const norm = bodyGeo.getAttribute('normal') as THREE.BufferAttribute;
+
+    let outwardChestNormals = 0;
+    let inwardChestNormals = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      if (y >= 1.0 && y <= 1.5 && z > 0.04) {
+        if (norm.getZ(i) > 0) outwardChestNormals++;
+        else inwardChestNormals++;
+      }
+    }
+    expect(outwardChestNormals).toBeGreaterThan(50);
+    expect(inwardChestNormals).toBe(0);
+  });
+
+  it('verifies RGB vertex colors for hair, facial accents, footwear, and accessories', () => {
+    const human = generateRealisticHumanScene({
+      hairColor: '#eab308', // Blonde hair
+      glassesColor: '#dc2626', // Red spectacles frame
+      shoesColor: '#0f172a',
+    });
+
+    // Check Body vertex colors include blonde hair vertices
+    const bodyGeo = createPrimitiveGeometry(human.bodyItem.primitiveType || 'custom', human.bodyItem.geometryParams);
+    const bodyCols = bodyGeo.getAttribute('color') as THREE.BufferAttribute;
+    expect(bodyCols).toBeDefined();
+
+    const expectedHair = new THREE.Color('#eab308');
+    let blondeHairVerts = 0;
+    for (let i = 0; i < bodyCols.count; i++) {
+      const r = bodyCols.getX(i);
+      const g = bodyCols.getY(i);
+      const b = bodyCols.getZ(i);
+      if (Math.abs(r - expectedHair.r) < 0.05 && Math.abs(g - expectedHair.g) < 0.05 && Math.abs(b - expectedHair.b) < 0.05) {
+        blondeHairVerts++;
+      }
+    }
+    expect(blondeHairVerts).toBeGreaterThan(100);
+
+    // Check Accessories vertex colors include red frame vertices
+    const accGeo = createPrimitiveGeometry(human.accessoriesItem!.primitiveType || 'custom', human.accessoriesItem!.geometryParams);
+    const accCols = accGeo.getAttribute('color') as THREE.BufferAttribute;
+    expect(accCols).toBeDefined();
+
+    const expectedGlasses = new THREE.Color('#dc2626');
+    let redGlassesVerts = 0;
+    for (let i = 0; i < accCols.count; i++) {
+      const r = accCols.getX(i);
+      const g = accCols.getY(i);
+      const b = accCols.getZ(i);
+      if (Math.abs(r - expectedGlasses.r) < 0.05 && Math.abs(g - expectedGlasses.g) < 0.05 && Math.abs(b - expectedGlasses.b) < 0.05) {
+        redGlassesVerts++;
+      }
+    }
+    expect(redGlassesVerts).toBeGreaterThan(100);
+  });
 });

@@ -529,14 +529,12 @@ function createSkinToneTexture(): THREE.DataTexture {
       const microPore = poreNoise > 0.45 ? -10 : (poreNoise < -0.45 ? 6 : 0);
       const fineGrain = (Math.sin(x * 12.3) * Math.cos(y * 11.7)) * 4;
 
-      // Natural neutral albedo base for skin tone with warm peach-tan undertones
-      const baseR = 232;
-      const baseG = 185;
-      const baseB = 162;
+      // High-albedo neutral skin substrate with delicate warm epidermal scattering
+      const baseVal = 244;
 
-      const r = Math.max(0, Math.min(255, Math.floor(baseR + subSurface * 14 + microPore + fineGrain)));
-      const g = Math.max(0, Math.min(255, Math.floor(baseG + subSurface * 10 + microPore * 0.8 + fineGrain * 0.8)));
-      const b = Math.max(0, Math.min(255, Math.floor(baseB + subSurface * 7 + microPore * 0.6 + fineGrain * 0.6)));
+      const r = Math.max(0, Math.min(255, Math.floor(baseVal + subSurface * 8 + microPore + fineGrain)));
+      const g = Math.max(0, Math.min(255, Math.floor((baseVal - 6) + subSurface * 6 + microPore * 0.8 + fineGrain * 0.8)));
+      const b = Math.max(0, Math.min(255, Math.floor((baseVal - 12) + subSurface * 4 + microPore * 0.6 + fineGrain * 0.6)));
 
       data[idx] = r;
       data[idx + 1] = g;

@@ -231,6 +231,9 @@ export const MCP_TOOLS = [
         pantsColor: { type: 'string', description: 'Hex color for denim jeans / trousers' },
         shoesColor: { type: 'string', description: 'Hex color for footwear boots' },
         skinColor: { type: 'string', description: 'Hex color for anatomical skin' },
+        hairColor: { type: 'string', description: 'Hex color for styled hair volume' },
+        glassesColor: { type: 'string', description: 'Hex color for spectacles/sunglasses frames' },
+        watchColor: { type: 'string', description: 'Hex color for wristwatch casing' },
         clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
       },
     },
@@ -652,6 +655,9 @@ export class PolyForgeMCPServer {
           pantsColor: args.pantsColor,
           shoesColor: args.shoesColor,
           skinColor: args.skinColor,
+          hairColor: args.hairColor,
+          glassesColor: args.glassesColor,
+          watchColor: args.watchColor,
         });
 
         this.state.items.push(...human.allItems);

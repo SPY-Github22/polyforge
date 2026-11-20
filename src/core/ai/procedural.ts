@@ -10,6 +10,7 @@ import {
   ProceduralTemplateId,
 } from './types';
 import { generateRealisticBicycle } from '../bicycle';
+import { generateRealisticHumanScene } from '../character';
 
 // Helper to create a unique ID
 function makeId(prefix: string): string {
@@ -1190,6 +1191,38 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
       };
     },
   },
+  'realistic-human': {
+    id: 'realistic-human',
+    name: 'Realistic Anatomical Human',
+    category: 'Character',
+    description: 'Procedurally generated realistic 3D human model with anatomical 7.8-head proportions (~1.78m tall), layered clothing (jacket/shirt, jeans trousers), footwear, and accessories (glasses, wristwatch, belt).',
+    tags: ['human', 'person', 'character', 'man', 'woman', 'avatar', 'body', 'anatomy', 'clothes', 'garment'],
+    generate: () => {
+      const result = generateRealisticHumanScene();
+      return {
+        description: 'Ultra-realistic procedurally synthesized 3D human character with 7.8-head anatomical proportions (~1.78m height), layered jacket, denim jeans, sneakers, sunglasses, wristwatch, and belt.',
+        items: result.allItems,
+        tracks: [],
+        timeline: {
+          currentFrame: 0,
+          totalFrames: 120,
+          fps: 30,
+          isPlaying: false,
+          isLooping: true,
+          autoKeying: false,
+        },
+        environment: {
+          backgroundColor: '#ffffff',
+          ambientIntensity: 0.8,
+          directionalIntensity: 1.5,
+          showGrid: true,
+          showAxes: true,
+          shadows: true,
+          preset: 'studio',
+        },
+      };
+    },
+  },
 };
 
 /**
@@ -1198,6 +1231,9 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
 export function matchProceduralTemplate(query: string): ProceduralTemplate {
   const q = query.toLowerCase();
 
+  if (q.includes('human') || q.includes('person') || q.includes('character') || q.includes('man') || q.includes('woman') || q.includes('avatar') || q.includes('anatomy') || q.includes('body') || q.includes('people')) {
+    return PROCEDURAL_TEMPLATES['realistic-human'];
+  }
   if (q.includes('bike') || q.includes('bicycle') || q.includes('cycle') || q.includes('cycling') || q.includes('drivetrain')) {
     return PROCEDURAL_TEMPLATES['realistic-bicycle'];
   }

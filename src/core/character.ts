@@ -55,6 +55,18 @@ function createBuffer(): GeometryBuffer {
   };
 }
 
+function pushColor(buf: GeometryBuffer, colorOrTint: THREE.Color | string | number): void {
+  if (!buf.colors) return;
+  if (typeof colorOrTint === 'string') {
+    const c = new THREE.Color(colorOrTint);
+    buf.colors.push(c.r, c.g, c.b);
+  } else if (colorOrTint instanceof THREE.Color) {
+    buf.colors.push(colorOrTint.r, colorOrTint.g, colorOrTint.b);
+  } else {
+    buf.colors.push(colorOrTint, colorOrTint, colorOrTint);
+  }
+}
+
 interface LoftRing {
   center: THREE.Vector3;
   rx: number;
@@ -72,7 +84,7 @@ function addLoftRings(
   buf: GeometryBuffer,
   capTop = false,
   capBottom = false,
-  tint = 1.0
+  colorOrTint: THREE.Color | string | number = 1.0
 ): void {
   if (rings.length < 2) return;
   const startVIdx = buf.positions.length / 3;
@@ -105,7 +117,7 @@ function addLoftRings(
       const nz = sinT;
       buf.normals.push(nx, ny, nz);
       buf.uvs.push(s / segments, vCoord);
-      if (buf.colors) buf.colors.push(tint, tint, tint);
+      pushColor(buf, colorOrTint);
     }
   }
 
@@ -120,12 +132,13 @@ function addLoftRings(
       const c = ring2 + s + 1;
       const d = ring1 + s + 1;
 
-      buf.indices.push(a, b, d);
-      buf.indices.push(b, c, d);
+      // Outward facing triangle winding for top-to-bottom loft rings
+      buf.indices.push(a, d, b);
+      buf.indices.push(b, d, c);
     }
   }
 
-  // Cap top
+  // Cap top (faces outward +y)
   if (capTop) {
     const topRing = rings[0];
     const topVStart = startVIdx;
@@ -133,14 +146,14 @@ function addLoftRings(
     buf.positions.push(topRing.center.x, topRing.center.y, topRing.center.z);
     buf.normals.push(0, 1, 0);
     buf.uvs.push(0.5, 0.5);
-    if (buf.colors) buf.colors.push(tint, tint, tint);
+    pushColor(buf, colorOrTint);
 
     for (let s = 0; s < segments; s++) {
-      buf.indices.push(cIdx, topVStart + s, topVStart + s + 1);
+      buf.indices.push(cIdx, topVStart + s + 1, topVStart + s);
     }
   }
 
-  // Cap bottom
+  // Cap bottom (faces outward -y)
   if (capBottom) {
     const botRing = rings[rings.length - 1];
     const botVStart = startVIdx + (rings.length - 1) * stride;
@@ -148,16 +161,17 @@ function addLoftRings(
     buf.positions.push(botRing.center.x, botRing.center.y, botRing.center.z);
     buf.normals.push(0, -1, 0);
     buf.uvs.push(0.5, 0.5);
-    if (buf.colors) buf.colors.push(tint, tint, tint);
+    pushColor(buf, colorOrTint);
 
     for (let s = 0; s < segments; s++) {
-      buf.indices.push(cIdx, botVStart + s + 1, botVStart + s);
+      buf.indices.push(cIdx, botVStart + s, botVStart + s + 1);
     }
   }
 }
 
 /**
  * Appends an ellipsoid with custom semi-axes to a geometry buffer.
+ * Uses dedicated top and bottom pole vertices with triangular fans to prevent collapsed degenerate quads.
  */
 function addEllipsoid(
   center: THREE.Vector3,
@@ -167,16 +181,31 @@ function addEllipsoid(
   widthSegs: number,
   heightSegs: number,
   buf: GeometryBuffer,
-  tint = 1.0,
+  colorOrTint: THREE.Color | string | number = 1.0,
   rot?: THREE.Euler
 ): void {
-  const startVIdx = buf.positions.length / 3;
   const rotMatrix = rot ? new THREE.Matrix4().makeRotationFromEuler(rot) : null;
 
-  for (let y = 0; y <= heightSegs; y++) {
-    const phi = (y / heightSegs) * Math.PI; // 0 (top pole) to PI (bottom pole)
+  // 1. Top Pole vertex (phi = 0)
+  const topPoleIdx = buf.positions.length / 3;
+  const topPos = new THREE.Vector3(0, ry, 0);
+  const topNorm = new THREE.Vector3(0, 1, 0);
+  if (rotMatrix) {
+    topPos.applyMatrix4(rotMatrix);
+    topNorm.applyMatrix4(rotMatrix).normalize();
+  }
+  buf.positions.push(center.x + topPos.x, center.y + topPos.y, center.z + topPos.z);
+  buf.normals.push(topNorm.x, topNorm.y, topNorm.z);
+  buf.uvs.push(0.5, 0.0);
+  pushColor(buf, colorOrTint);
+
+  // 2. Intermediate rings (phi from y=1 to heightSegs-1)
+  const ringStarts: number[] = [];
+  for (let y = 1; y < heightSegs; y++) {
+    const phi = (y / heightSegs) * Math.PI;
     const sinPhi = Math.sin(phi);
     const cosPhi = Math.cos(phi);
+    ringStarts.push(buf.positions.length / 3);
 
     for (let x = 0; x <= widthSegs; x++) {
       const theta = (x / widthSegs) * Math.PI * 2;
@@ -201,7 +230,7 @@ function addEllipsoid(
         ly = v.y;
         lz = v.z;
 
-        const n = new THREE.Vector3(nx, ny, nz).applyMatrix4(rotMatrix);
+        const n = new THREE.Vector3(nx, ny, nz).applyMatrix4(rotMatrix).normalize();
         nx = n.x;
         ny = n.y;
         nz = n.z;
@@ -210,21 +239,48 @@ function addEllipsoid(
       buf.positions.push(center.x + lx, center.y + ly, center.z + lz);
       buf.normals.push(nx, ny, nz);
       buf.uvs.push(x / widthSegs, y / heightSegs);
-      if (buf.colors) buf.colors.push(tint, tint, tint);
+      pushColor(buf, colorOrTint);
     }
   }
 
-  const stride = widthSegs + 1;
-  for (let y = 0; y < heightSegs; y++) {
-    for (let x = 0; x < widthSegs; x++) {
-      const a = startVIdx + y * stride + x;
-      const b = startVIdx + (y + 1) * stride + x;
-      const c = startVIdx + (y + 1) * stride + x + 1;
-      const d = startVIdx + y * stride + x + 1;
+  // 3. Bottom Pole vertex (phi = PI)
+  const botPoleIdx = buf.positions.length / 3;
+  const botPos = new THREE.Vector3(0, -ry, 0);
+  const botNorm = new THREE.Vector3(0, -1, 0);
+  if (rotMatrix) {
+    botPos.applyMatrix4(rotMatrix);
+    botNorm.applyMatrix4(rotMatrix).normalize();
+  }
+  buf.positions.push(center.x + botPos.x, center.y + botPos.y, center.z + botPos.z);
+  buf.normals.push(botNorm.x, botNorm.y, botNorm.z);
+  buf.uvs.push(0.5, 1.0);
+  pushColor(buf, colorOrTint);
 
-      buf.indices.push(a, b, d);
-      buf.indices.push(b, c, d);
+  // 4. Triangles: Top fan (outward winding)
+  const firstRingStart = ringStarts[0];
+  for (let x = 0; x < widthSegs; x++) {
+    buf.indices.push(topPoleIdx, firstRingStart + x + 1, firstRingStart + x);
+  }
+
+  // 5. Triangles: Intermediate quads (outward winding)
+  for (let y = 0; y < heightSegs - 2; y++) {
+    const r1 = ringStarts[y];
+    const r2 = ringStarts[y + 1];
+    for (let x = 0; x < widthSegs; x++) {
+      const a = r1 + x;
+      const b = r2 + x;
+      const c = r2 + x + 1;
+      const d = r1 + x + 1;
+
+      buf.indices.push(a, d, b);
+      buf.indices.push(b, d, c);
     }
+  }
+
+  // 6. Triangles: Bottom fan (outward winding)
+  const lastRingStart = ringStarts[ringStarts.length - 1];
+  for (let x = 0; x < widthSegs; x++) {
+    buf.indices.push(botPoleIdx, lastRingStart + x, lastRingStart + x + 1);
   }
 }
 
@@ -240,7 +296,7 @@ function addCylinder(
   buf: GeometryBuffer,
   capStart = true,
   capEnd = true,
-  tint = 1.0
+  colorOrTint: THREE.Color | string | number = 1.0
 ): void {
   const dir = new THREE.Vector3().subVectors(p2, p1);
   const len = dir.length();
@@ -277,7 +333,7 @@ function addCylinder(
       buf.positions.push(vx, vy, vz);
       buf.normals.push(radialVec.x, radialVec.y, radialVec.z);
       buf.uvs.push(s / segments, vCoord);
-      if (buf.colors) buf.colors.push(tint, tint, tint);
+      pushColor(buf, colorOrTint);
     }
   }
 
@@ -297,10 +353,10 @@ function addCylinder(
     buf.positions.push(p1.x, p1.y, p1.z);
     buf.normals.push(-dir.x, -dir.y, -dir.z);
     buf.uvs.push(0.5, 0.5);
-    if (buf.colors) buf.colors.push(tint, tint, tint);
+    pushColor(buf, colorOrTint);
 
     for (let s = 0; s < segments; s++) {
-      buf.indices.push(cIdx, startVIdx + s + 1, startVIdx + s);
+      buf.indices.push(cIdx, startVIdx + s, startVIdx + s + 1);
     }
   }
 
@@ -309,11 +365,11 @@ function addCylinder(
     buf.positions.push(p2.x, p2.y, p2.z);
     buf.normals.push(dir.x, dir.y, dir.z);
     buf.uvs.push(0.5, 0.5);
-    if (buf.colors) buf.colors.push(tint, tint, tint);
+    pushColor(buf, colorOrTint);
 
     const endRingStart = startVIdx + stride;
     for (let s = 0; s < segments; s++) {
-      buf.indices.push(cIdx, endRingStart + s, endRingStart + s + 1);
+      buf.indices.push(cIdx, endRingStart + s + 1, endRingStart + s);
     }
   }
 }
@@ -326,7 +382,7 @@ function addBox(
   size: THREE.Vector3,
   rot: THREE.Euler,
   buf: GeometryBuffer,
-  tint = 1.0
+  colorOrTint: THREE.Color | string | number = 1.0
 ): void {
   const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(rot);
   const hx = size.x / 2;
@@ -362,7 +418,7 @@ function addBox(
     for (const c of corners) {
       buf.positions.push(c.x, c.y, c.z);
       buf.normals.push(nRot.x, nRot.y, nRot.z);
-      if (buf.colors) buf.colors.push(tint, tint, tint);
+      pushColor(buf, colorOrTint);
     }
     buf.uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
 
@@ -382,7 +438,7 @@ function addTorus(
   tubularSegs: number,
   rot: THREE.Euler,
   buf: GeometryBuffer,
-  tint = 1.0
+  colorOrTint: THREE.Color | string | number = 1.0
 ): void {
   const rotMatrix = new THREE.Matrix4().makeRotationFromEuler(rot);
   const startVIdx = buf.positions.length / 3;
@@ -406,7 +462,7 @@ function addTorus(
       buf.positions.push(pVec.x, pVec.y, pVec.z);
       buf.normals.push(nVec.x, nVec.y, nVec.z);
       buf.uvs.push(i / tubularSegs, j / radialSegs);
-      if (buf.colors) buf.colors.push(tint, tint, tint);
+      pushColor(buf, colorOrTint);
     }
   }
 
@@ -493,17 +549,21 @@ export function generateRealisticHumanScene(
   // =========================================================================
   const bodyBuf = createBuffer();
 
+  const skinColorObj = new THREE.Color(skinColor);
+  const hairColorObj = new THREE.Color(hairColor);
+  const vermilionLips = skinColorObj.clone().lerp(new THREE.Color('#b91c1c'), 0.35);
+
   // --- Head, Cranium & Facial Structure ---
   // Cranium vault
-  addEllipsoid(new THREE.Vector3(0, 1.685, -0.015), 0.088, 0.098, 0.095, 20, 16, bodyBuf, 1.0);
+  addEllipsoid(new THREE.Vector3(0, 1.685, -0.015), 0.088, 0.098, 0.095, 20, 16, bodyBuf, skinColorObj);
 
   // Defined jawline, chin and cheekbones
-  addEllipsoid(new THREE.Vector3(0, 1.58, 0.025), 0.068, 0.055, 0.062, 16, 12, bodyBuf, 0.98); // Lower jaw base
-  addEllipsoid(new THREE.Vector3(0, 1.545, 0.068), 0.024, 0.018, 0.022, 12, 10, bodyBuf, 0.97); // Prominent chin
+  addEllipsoid(new THREE.Vector3(0, 1.58, 0.025), 0.068, 0.055, 0.062, 16, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.98)); // Lower jaw base
+  addEllipsoid(new THREE.Vector3(0, 1.545, 0.068), 0.024, 0.018, 0.022, 12, 10, bodyBuf, skinColorObj.clone().multiplyScalar(0.97)); // Prominent chin
 
   // Brow ridge & cheekbones (zygomatic arches)
-  addEllipsoid(new THREE.Vector3(0.042, 1.625, 0.052), 0.024, 0.018, 0.022, 10, 8, bodyBuf, 0.98);
-  addEllipsoid(new THREE.Vector3(-0.042, 1.625, 0.052), 0.024, 0.018, 0.022, 10, 8, bodyBuf, 0.98);
+  addEllipsoid(new THREE.Vector3(0.042, 1.625, 0.052), 0.024, 0.018, 0.022, 10, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
+  addEllipsoid(new THREE.Vector3(-0.042, 1.625, 0.052), 0.024, 0.018, 0.022, 10, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
 
   // Nose bridge and tip
   addCylinder(
@@ -515,13 +575,13 @@ export function generateRealisticHumanScene(
     bodyBuf,
     true,
     true,
-    0.98
+    skinColorObj.clone().multiplyScalar(0.98)
   );
-  addEllipsoid(new THREE.Vector3(0, 1.608, 0.098), 0.012, 0.009, 0.011, 8, 8, bodyBuf, 0.97); // Nose tip
+  addEllipsoid(new THREE.Vector3(0, 1.608, 0.098), 0.012, 0.009, 0.011, 8, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.97)); // Nose tip
 
   // Lips (Upper and lower vermilion)
-  addEllipsoid(new THREE.Vector3(0, 1.582, 0.075), 0.020, 0.006, 0.008, 10, 6, bodyBuf, 0.93);
-  addEllipsoid(new THREE.Vector3(0, 1.568, 0.073), 0.018, 0.007, 0.009, 10, 6, bodyBuf, 0.92);
+  addEllipsoid(new THREE.Vector3(0, 1.582, 0.075), 0.020, 0.006, 0.008, 10, 6, bodyBuf, vermilionLips);
+  addEllipsoid(new THREE.Vector3(0, 1.568, 0.073), 0.018, 0.007, 0.009, 10, 6, bodyBuf, vermilionLips);
 
   // Ear lobes & pinna
   addEllipsoid(
@@ -532,7 +592,7 @@ export function generateRealisticHumanScene(
     10,
     10,
     bodyBuf,
-    0.95,
+    skinColorObj.clone().multiplyScalar(0.96),
     new THREE.Euler(0.1, 0, -0.2)
   );
   addEllipsoid(
@@ -543,14 +603,11 @@ export function generateRealisticHumanScene(
     10,
     10,
     bodyBuf,
-    0.95,
+    skinColorObj.clone().multiplyScalar(0.96),
     new THREE.Euler(0.1, 0, 0.2)
   );
 
   // Stylized modern coiffure / hair volume
-  const hairColorObj = new THREE.Color(hairColor);
-  const hairTint = Math.max(0.05, Math.min(0.9, hairColorObj.r * 0.3 + hairColorObj.g * 0.59 + hairColorObj.b * 0.11));
-
   addEllipsoid(
     new THREE.Vector3(0, 1.708, -0.018),
     0.093,
@@ -559,7 +616,7 @@ export function generateRealisticHumanScene(
     20,
     16,
     bodyBuf,
-    hairTint
+    hairColorObj
   );
   // Hair fringe / styled front sweep
   addEllipsoid(
@@ -570,7 +627,7 @@ export function generateRealisticHumanScene(
     14,
     10,
     bodyBuf,
-    hairTint
+    hairColorObj
   );
 
   // Neck cylinder with sternocleidomastoid taper
@@ -579,7 +636,7 @@ export function generateRealisticHumanScene(
     { center: new THREE.Vector3(0, 1.50, -0.005), rx: 0.054, rz: 0.058, frontOffset: 0.006 }, // Adam's apple / thyroid
     { center: new THREE.Vector3(0, 1.45, -0.005), rx: 0.070, rz: 0.068 },
   ];
-  addLoftRings(neckRings, 16, bodyBuf, false, false, 0.98);
+  addLoftRings(neckRings, 16, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.98));
 
   // --- Torso & Shoulders ---
   // Broad clavicle line, pectoral contours, latissimus dorsi, ribcage taper, waist, and hips
@@ -592,18 +649,18 @@ export function generateRealisticHumanScene(
     { center: new THREE.Vector3(0, 0.88, -0.010), rx: 0.158, rz: 0.125, backOffset: 0.032 },  // Hips / Greater trochanters
     { center: new THREE.Vector3(0, 0.83, -0.008), rx: 0.142, rz: 0.110 },                     // Crotch / Pelvic floor
   ];
-  addLoftRings(torsoRings, 24, bodyBuf, true, true, 1.0);
+  addLoftRings(torsoRings, 24, bodyBuf, true, true, skinColorObj);
 
   // Gluteal muscle volume (left and right buttocks)
-  addEllipsoid(new THREE.Vector3(0.074, 0.91, -0.088), 0.072, 0.085, 0.065, 14, 12, bodyBuf, 0.98);
-  addEllipsoid(new THREE.Vector3(-0.074, 0.91, -0.088), 0.072, 0.085, 0.065, 14, 12, bodyBuf, 0.98);
+  addEllipsoid(new THREE.Vector3(0.074, 0.91, -0.088), 0.072, 0.085, 0.065, 14, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
+  addEllipsoid(new THREE.Vector3(-0.074, 0.91, -0.088), 0.072, 0.085, 0.065, 14, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
 
   // --- Upper Limbs (Deltoids, Biceps, Elbows, Forearms, Wrists, Hands) ---
   const armSides = [1, -1]; // 1 = Right, -1 = Left
   for (const side of armSides) {
     const xDeltoid = side * 0.198;
     // Deltoid shoulder cap
-    addEllipsoid(new THREE.Vector3(xDeltoid, 1.425, -0.008), 0.062, 0.074, 0.062, 14, 12, bodyBuf, 1.0);
+    addEllipsoid(new THREE.Vector3(xDeltoid, 1.425, -0.008), 0.062, 0.074, 0.062, 14, 12, bodyBuf, skinColorObj);
 
     // Biceps / Brachii (Upper arm)
     const upperArmRings: LoftRing[] = [
@@ -611,10 +668,10 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(side * 0.224, 1.28, -0.008), rx: 0.045, rz: 0.046, frontOffset: 0.008 }, // Bicep peak
       { center: new THREE.Vector3(side * 0.238, 1.16, -0.012), rx: 0.040, rz: 0.042 },                     // Elbow joint
     ];
-    addLoftRings(upperArmRings, 16, bodyBuf, false, false, 0.99);
+    addLoftRings(upperArmRings, 16, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.99));
 
     // Olecranon elbow prominence
-    addEllipsoid(new THREE.Vector3(side * 0.238, 1.155, -0.046), 0.016, 0.018, 0.014, 8, 8, bodyBuf, 0.96);
+    addEllipsoid(new THREE.Vector3(side * 0.238, 1.155, -0.046), 0.016, 0.018, 0.014, 8, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
 
     // Forearm (Brachioradialis taper to wrist)
     const forearmRings: LoftRing[] = [
@@ -622,11 +679,11 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(side * 0.252, 1.02, -0.010), rx: 0.035, rz: 0.034 },
       { center: new THREE.Vector3(side * 0.264, 0.89, -0.008), rx: 0.028, rz: 0.024 }, // Wrist
     ];
-    addLoftRings(forearmRings, 16, bodyBuf, false, false, 0.99);
+    addLoftRings(forearmRings, 16, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.99));
 
     // Palm and modeled hand
     const palmCenter = new THREE.Vector3(side * 0.272, 0.825, -0.006);
-    addBox(palmCenter, new THREE.Vector3(0.022, 0.095, 0.045), new THREE.Euler(0, 0, side * 0.08), bodyBuf, 0.98);
+    addBox(palmCenter, new THREE.Vector3(0.022, 0.095, 0.045), new THREE.Euler(0, 0, side * 0.08), bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
 
     // Abducted thumb
     addCylinder(
@@ -638,7 +695,7 @@ export function generateRealisticHumanScene(
       bodyBuf,
       true,
       true,
-      0.97
+      skinColorObj.clone().multiplyScalar(0.97)
     );
 
     // Grouped 4 fingers curling naturally downward
@@ -651,7 +708,7 @@ export function generateRealisticHumanScene(
       bodyBuf,
       true,
       true,
-      0.96
+      skinColorObj.clone().multiplyScalar(0.96)
     );
   }
 
@@ -667,10 +724,10 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(xLeg, 0.58, -0.004), rx: 0.068, rz: 0.072 },
       { center: new THREE.Vector3(xLeg, 0.50, -0.002), rx: 0.058, rz: 0.060 }, // Knee joint
     ];
-    addLoftRings(thighRings, 18, bodyBuf, false, false, 1.0);
+    addLoftRings(thighRings, 18, bodyBuf, false, false, skinColorObj);
 
     // Patella (kneecap) ridge
-    addEllipsoid(new THREE.Vector3(xLeg, 0.495, 0.055), 0.024, 0.028, 0.018, 10, 10, bodyBuf, 0.98);
+    addEllipsoid(new THREE.Vector3(xLeg, 0.495, 0.055), 0.024, 0.028, 0.018, 10, 10, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
 
     // Lower Leg & Calves (Gastrocnemius & Soleus taper to Achilles)
     const calfRings: LoftRing[] = [
@@ -679,19 +736,19 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(xLeg, 0.22, -0.008), rx: 0.046, rz: 0.048 },
       { center: new THREE.Vector3(xLeg, 0.10, -0.005), rx: 0.036, rz: 0.038 }, // Above ankle
     ];
-    addLoftRings(calfRings, 18, bodyBuf, false, false, 0.99);
+    addLoftRings(calfRings, 18, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.99));
 
     // Ankle malleoli (lateral and medial prominence)
-    addEllipsoid(new THREE.Vector3(xLeg + side * 0.032, 0.082, -0.005), 0.012, 0.015, 0.014, 8, 8, bodyBuf, 0.96);
-    addEllipsoid(new THREE.Vector3(xLeg - side * 0.028, 0.086, -0.005), 0.012, 0.015, 0.014, 8, 8, bodyBuf, 0.96);
+    addEllipsoid(new THREE.Vector3(xLeg + side * 0.032, 0.082, -0.005), 0.012, 0.015, 0.014, 8, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
+    addEllipsoid(new THREE.Vector3(xLeg - side * 0.028, 0.086, -0.005), 0.012, 0.015, 0.014, 8, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
 
     // Arched foot (standing flat on the ground plane with bottom at y = 0)
     // Heel (calcaneus)
-    addEllipsoid(new THREE.Vector3(xLeg, 0.045, -0.052), 0.034, 0.038, 0.045, 12, 10, bodyBuf, 0.98);
+    addEllipsoid(new THREE.Vector3(xLeg, 0.045, -0.052), 0.034, 0.038, 0.045, 12, 10, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
     // Midfoot arch & instep
-    addEllipsoid(new THREE.Vector3(xLeg, 0.042, 0.025), 0.038, 0.034, 0.060, 12, 10, bodyBuf, 0.98);
+    addEllipsoid(new THREE.Vector3(xLeg, 0.042, 0.025), 0.038, 0.034, 0.060, 12, 10, bodyBuf, skinColorObj.clone().multiplyScalar(0.98));
     // Ball of foot & grouped toes
-    addEllipsoid(new THREE.Vector3(xLeg, 0.022, 0.105), 0.042, 0.020, 0.038, 12, 8, bodyBuf, 0.96);
+    addEllipsoid(new THREE.Vector3(xLeg, 0.022, 0.105), 0.042, 0.020, 0.038, 12, 8, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
   }
 
   const bodyItem = bufferToSceneItem(
@@ -709,6 +766,7 @@ export function generateRealisticHumanScene(
       transparent: false,
       wireframe: false,
       texturePreset: 'skin_tone',
+      vertexColors: true,
     }
   );
 
@@ -731,6 +789,7 @@ export function generateRealisticHumanScene(
   if (includeClothing) {
     // --- Upper Body: Jacket / Fitted Shirt ---
     const upperBuf = createBuffer();
+    const shirtColorObj = new THREE.Color(shirtColor);
 
     // Shirt / Jacket Torso Shell cleanly encasing the torso with realistic textile offset
     const shirtRings: LoftRing[] = [
@@ -741,7 +800,7 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(0, 0.97, -0.005), rx: 0.165, rz: 0.130, backOffset: 0.026 }, // Hip hem
       { center: new THREE.Vector3(0, 0.94, -0.006), rx: 0.168, rz: 0.132, backOffset: 0.026 }, // Thickened bottom hem
     ];
-    addLoftRings(shirtRings, 24, upperBuf, false, true, 1.0);
+    addLoftRings(shirtRings, 24, upperBuf, false, true, shirtColorObj);
 
     // Collar trim around neck
     addTorus(
@@ -752,7 +811,7 @@ export function generateRealisticHumanScene(
       24,
       new THREE.Euler(Math.PI / 2 + 0.15, 0, 0),
       upperBuf,
-      0.92
+      shirtColorObj.clone().multiplyScalar(0.92)
     );
 
     // Front placket seam / zipper closure
@@ -761,7 +820,7 @@ export function generateRealisticHumanScene(
       new THREE.Vector3(0.022, 0.48, 0.008),
       new THREE.Euler(0, 0, 0),
       upperBuf,
-      0.88
+      shirtColorObj.clone().multiplyScalar(0.88)
     );
     // Metallic zipper slider pull
     addBox(
@@ -769,7 +828,7 @@ export function generateRealisticHumanScene(
       new THREE.Vector3(0.016, 0.028, 0.012),
       new THREE.Euler(0, 0, 0),
       upperBuf,
-      0.45 // Metallic dark zipper
+      new THREE.Color('#94a3b8') // Metallic dark zipper
     );
 
     // Jacket Sleeves (encasing upper arms down to wrists)
@@ -781,7 +840,7 @@ export function generateRealisticHumanScene(
         { center: new THREE.Vector3(side * 0.252, 1.02, -0.010), rx: 0.044, rz: 0.044 },
         { center: new THREE.Vector3(side * 0.264, 0.895, -0.008), rx: 0.038, rz: 0.036 }, // Wrist cuff
       ];
-      addLoftRings(sleeveRings, 16, upperBuf, false, false, 0.98);
+      addLoftRings(sleeveRings, 16, upperBuf, false, false, shirtColorObj.clone().multiplyScalar(0.98));
 
       // Folded sleeve cuff band at wrist
       addTorus(
@@ -792,7 +851,7 @@ export function generateRealisticHumanScene(
         16,
         new THREE.Euler(0, 0, side * 0.12),
         upperBuf,
-        0.90
+        shirtColorObj.clone().multiplyScalar(0.90)
       );
     }
 
@@ -811,12 +870,14 @@ export function generateRealisticHumanScene(
         transparent: false,
         wireframe: false,
         texturePreset: 'knit_cotton',
+        vertexColors: true,
       }
     );
     allItems.push(clothingUpperItem);
 
     // --- Lower Body: Jeans / Trousers ---
     const lowerBuf = createBuffer();
+    const pantsColorObj = new THREE.Color(pantsColor);
 
     // Waistband & Pelvis shell
     const waistbandRings: LoftRing[] = [
@@ -824,7 +885,7 @@ export function generateRealisticHumanScene(
       { center: new THREE.Vector3(0, 0.96, -0.006), rx: 0.168, rz: 0.130, backOffset: 0.024 },
       { center: new THREE.Vector3(0, 0.87, -0.008), rx: 0.174, rz: 0.136, backOffset: 0.032 },
     ];
-    addLoftRings(waistbandRings, 24, lowerBuf, true, false, 0.95);
+    addLoftRings(waistbandRings, 24, lowerBuf, true, false, pantsColorObj.clone().multiplyScalar(0.95));
 
     // Front fly seam & button on jeans
     addBox(
@@ -832,9 +893,9 @@ export function generateRealisticHumanScene(
       new THREE.Vector3(0.018, 0.12, 0.006),
       new THREE.Euler(0, 0, 0),
       lowerBuf,
-      0.85
+      pantsColorObj.clone().multiplyScalar(0.85)
     );
-    addEllipsoid(new THREE.Vector3(0, 1.00, 0.134), 0.008, 0.008, 0.005, 8, 8, lowerBuf, 0.4); // Brass button
+    addEllipsoid(new THREE.Vector3(0, 1.00, 0.134), 0.008, 0.008, 0.005, 8, 8, lowerBuf, new THREE.Color('#d97706')); // Brass button
 
     // 5 Belt loops
     const beltLoopAngles = [0.45, -0.45, 1.45, -1.45, Math.PI];
@@ -846,7 +907,7 @@ export function generateRealisticHumanScene(
         new THREE.Vector3(0.012, 0.045, 0.006),
         new THREE.Euler(0, -ang, 0),
         lowerBuf,
-        0.88
+        pantsColorObj.clone().multiplyScalar(0.88)
       );
     }
 
@@ -865,7 +926,7 @@ export function generateRealisticHumanScene(
         { center: new THREE.Vector3(xLeg, 0.22, -0.006), rx: 0.056, rz: 0.058 },
         { center: new THREE.Vector3(xLeg, 0.12, -0.004), rx: 0.050, rz: 0.052 }, // Ankle hem
       ];
-      addLoftRings(legRings, 18, lowerBuf, false, true, 1.0);
+      addLoftRings(legRings, 18, lowerBuf, false, true, pantsColorObj);
 
       // Trouser bottom cuff hem
       addTorus(
@@ -876,7 +937,7 @@ export function generateRealisticHumanScene(
         16,
         new THREE.Euler(Math.PI / 2, 0, 0),
         lowerBuf,
-        0.90
+        pantsColorObj.clone().multiplyScalar(0.90)
       );
 
       // Lateral outseam running down outside of trousers
@@ -889,7 +950,7 @@ export function generateRealisticHumanScene(
         lowerBuf,
         true,
         true,
-        0.82
+        pantsColorObj.clone().multiplyScalar(0.82)
       );
     }
 
@@ -908,6 +969,7 @@ export function generateRealisticHumanScene(
         transparent: false,
         wireframe: false,
         texturePreset: 'denim_fabric',
+        vertexColors: true,
       }
     );
     allItems.push(clothingLowerItem);
@@ -917,6 +979,7 @@ export function generateRealisticHumanScene(
 
     // --- Footwear: Street Boots / Structured Sneakers ---
     const shoesBuf = createBuffer();
+    const shoesColorObj = new THREE.Color(shoesColor);
 
     for (const side of legSides) {
       const xFoot = side * 0.092;
@@ -928,7 +991,7 @@ export function generateRealisticHumanScene(
         new THREE.Vector3(0.094, 0.016, 0.255),
         new THREE.Euler(0, 0, 0),
         shoesBuf,
-        0.25 // Dark vulcanized rubber
+        new THREE.Color('#1e293b') // Dark vulcanized rubber
       );
 
       // 2. Midsole wedge (cushioning wedge elevating heel to y = 0.038)
@@ -937,7 +1000,7 @@ export function generateRealisticHumanScene(
         new THREE.Vector3(0.090, 0.018, 0.245),
         new THREE.Euler(0, 0, 0),
         shoesBuf,
-        0.85 // Crisp contrast midsole
+        new THREE.Color('#f8fafc') // Crisp contrast midsole
       );
 
       // 3. Leather boot upper encasing foot from midsole to ankle collar
@@ -947,7 +1010,7 @@ export function generateRealisticHumanScene(
         { center: new THREE.Vector3(xFoot, 0.05, 0.035), rx: 0.046, rz: 0.110, frontOffset: 0.022 },
         { center: new THREE.Vector3(xFoot, 0.032, 0.042), rx: 0.045, rz: 0.120 },
       ];
-      addLoftRings(shoeUpperRings, 16, shoesBuf, false, true, 0.95);
+      addLoftRings(shoeUpperRings, 16, shoesBuf, false, true, shoesColorObj);
 
       // 4. Structured toe cap rand
       addEllipsoid(
@@ -958,7 +1021,7 @@ export function generateRealisticHumanScene(
         12,
         8,
         shoesBuf,
-        0.85
+        shoesColorObj.clone().multiplyScalar(0.85)
       );
 
       // 5. Padded shoe tongue rising up the instep
@@ -967,7 +1030,7 @@ export function generateRealisticHumanScene(
         new THREE.Vector3(0.034, 0.082, 0.014),
         new THREE.Euler(0.48, 0, 0),
         shoesBuf,
-        0.90
+        shoesColorObj.clone().multiplyScalar(0.90)
       );
 
       // 6. Cross-laced eyelets and laces
@@ -984,7 +1047,7 @@ export function generateRealisticHumanScene(
           shoesBuf,
           true,
           true,
-          0.98
+          new THREE.Color('#f1f5f9') // Crisp white laces
         );
       }
     }
@@ -1004,6 +1067,7 @@ export function generateRealisticHumanScene(
         transparent: false,
         wireframe: false,
         texturePreset: 'leather_boot',
+        vertexColors: true,
       }
     );
     allItems.push(footwearItem);
@@ -1020,7 +1084,7 @@ export function generateRealisticHumanScene(
 
     // --- Eyewear (Glasses / Sunglasses) ---
     const glassesColorObj = new THREE.Color(glassesColor);
-    const glassesTint = Math.max(0.1, Math.min(0.9, glassesColorObj.r * 0.3 + glassesColorObj.g * 0.59 + glassesColorObj.b * 0.11));
+    const watchColorObj = new THREE.Color(watchColor);
 
     // Rims around each eye (left & right)
     for (const side of [1, -1]) {
@@ -1034,7 +1098,7 @@ export function generateRealisticHumanScene(
         18,
         new THREE.Euler(0, 0, 0),
         accBuf,
-        glassesTint
+        glassesColorObj
       );
 
       // Tinted glass lens
@@ -1046,7 +1110,7 @@ export function generateRealisticHumanScene(
         10,
         8,
         accBuf,
-        0.4
+        new THREE.Color('#334155')
       );
 
       // Temple arm extending back to sit over ear
@@ -1059,7 +1123,7 @@ export function generateRealisticHumanScene(
         accBuf,
         true,
         true,
-        glassesTint
+        glassesColorObj
       );
     }
 
@@ -1073,7 +1137,7 @@ export function generateRealisticHumanScene(
       accBuf,
       true,
       true,
-      0.3
+      glassesColorObj
     );
 
     // --- Smart Watch / Wristwatch (on Left Wrist) ---
@@ -1088,7 +1152,7 @@ export function generateRealisticHumanScene(
       accBuf,
       true,
       true,
-      0.85 // Brushed silver/titanium
+      watchColorObj // Brushed silver/titanium
     );
 
     // Display glass screen
@@ -1100,7 +1164,7 @@ export function generateRealisticHumanScene(
       12,
       10,
       accBuf,
-      0.15 // Dark sapphire display glass
+      new THREE.Color('#0f172a') // Dark sapphire display glass
     );
 
     // Crown dial button on side
@@ -1113,7 +1177,7 @@ export function generateRealisticHumanScene(
       accBuf,
       true,
       true,
-      0.90
+      watchColorObj.clone().multiplyScalar(1.1)
     );
 
     // Fitted wrist strap wrapping around wrist circumference
@@ -1125,7 +1189,7 @@ export function generateRealisticHumanScene(
       18,
       new THREE.Euler(0, 0, -0.12),
       accBuf,
-      0.35 // Dark strap
+      new THREE.Color('#1e293b') // Dark strap
     );
 
     // --- Leather Belt & Metallic Buckle ---
@@ -1138,7 +1202,7 @@ export function generateRealisticHumanScene(
       24,
       new THREE.Euler(Math.PI / 2, 0, 0),
       accBuf,
-      0.30 // Rich leather belt
+      new THREE.Color('#451a03') // Rich leather belt
     );
 
     // Rectangular metallic buckle at center front
@@ -1149,28 +1213,28 @@ export function generateRealisticHumanScene(
       new THREE.Vector3(0.046, 0.006, 0.006),
       new THREE.Euler(0, 0, 0),
       accBuf,
-      0.95 // Chrome/nickel buckle
+      new THREE.Color('#f1f5f9') // Chrome/nickel buckle
     );
     addBox(
       new THREE.Vector3(buckleCenter.x, buckleCenter.y - 0.020, buckleCenter.z),
       new THREE.Vector3(0.046, 0.006, 0.006),
       new THREE.Euler(0, 0, 0),
       accBuf,
-      0.95
+      new THREE.Color('#f1f5f9')
     );
     addBox(
       new THREE.Vector3(buckleCenter.x - 0.022, buckleCenter.y, buckleCenter.z),
       new THREE.Vector3(0.006, 0.036, 0.006),
       new THREE.Euler(0, 0, 0),
       accBuf,
-      0.95
+      new THREE.Color('#f1f5f9')
     );
     addBox(
       new THREE.Vector3(buckleCenter.x + 0.022, buckleCenter.y, buckleCenter.z),
       new THREE.Vector3(0.006, 0.036, 0.006),
       new THREE.Euler(0, 0, 0),
       accBuf,
-      0.95
+      new THREE.Color('#f1f5f9')
     );
     // Buckle center prong
     addCylinder(
@@ -1182,7 +1246,7 @@ export function generateRealisticHumanScene(
       accBuf,
       true,
       true,
-      0.95
+      new THREE.Color('#cbd5e1')
     );
 
     accessoriesItem = bufferToSceneItem(

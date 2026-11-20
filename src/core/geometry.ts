@@ -118,7 +118,10 @@ export function createPrimitiveGeometry(
       geo = new THREE.BoxGeometry(1, 1, 1);
   }
 
-  geo.computeVertexNormals();
+  if (!geo.getAttribute('normal')) {
+    geo.computeVertexNormals();
+  }
+  geo.normalizeNormals();
   return geo;
 }
 

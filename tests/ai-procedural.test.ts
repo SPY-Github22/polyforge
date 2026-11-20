@@ -78,6 +78,20 @@ describe('Procedural 3D & Animation Generators', () => {
     expect(matchProceduralTemplate('Stylized pine forest landscape terrain').id).toBe('procedural-biome');
     expect(matchProceduralTemplate('Classical spiral staircase with marble columns').id).toBe('spiral-pavilion');
     expect(matchProceduralTemplate('Towering sci-fi skyscraper with glowing rings').id).toBe('sci-fi-citadel');
+    expect(matchProceduralTemplate('make a model of a human with clothes and accessories').id).toBe('realistic-human');
+    expect(matchProceduralTemplate('create a 3D avatar person with jacket and trousers').id).toBe('realistic-human');
+  });
+
+  it('generates Realistic Anatomical Human via template with white viewport background', () => {
+    const tmpl = PROCEDURAL_TEMPLATES['realistic-human'];
+    expect(tmpl).toBeDefined();
+    expect(tmpl.category).toBe('Character');
+
+    const result = tmpl.generate();
+    expect(result.items.length).toBe(5);
+    expect(result.environment?.backgroundColor).toBe('#ffffff');
+    expect(result.environment?.preset).toBe('studio');
+    expect(result.description).toContain('procedurally synthesized 3D human character');
   });
 
   it('all registered templates can be invoked without errors', () => {

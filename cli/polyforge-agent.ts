@@ -46,7 +46,7 @@ Commands:
   run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
   generate-tree [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic high-poly botanical oak tree
   generate-bicycle [--out <f>] [--format <obj|stl|glb|json>] [--handlebar <drop|flat>] [--pedals <platform|clipless>] [--spokes <n>] [--wheelsize <r>] Synthesize an ultra-realistic mechanically precise bicycle
-  generate-human [--out <f>] [--format <obj|stl|glb|json>] [--clothes] [--accessories] [--export] Synthesize an ultra-realistic anatomical 3D human model
+  generate-human [--out <f>] [--format <obj|stl|glb|json>] [--clothes] [--accessories] [--export] [--hair-color <c>] [--glasses-color <c>] Synthesize an ultra-realistic anatomical 3D human model
   export <scene.json> --format <obj|stl|glb|json> [--out <f>] Export a scene to 3D geometry formats
   inspect <scene.json>                                    Display detailed summary and metrics of a scene file
   mcp                                                     Launch the Model Context Protocol stdio server
@@ -300,12 +300,25 @@ async function main() {
     }
 
     case 'generate-human': {
-      const includeClothing = !hasFlag('--no-clothes');
-      const includeAccessories = !hasFlag('--no-accessories');
+      let includeClothing = !hasFlag('--no-clothes');
+      const clothesArg = getArgValue('--clothes');
+      if (clothesArg !== null) {
+        includeClothing = clothesArg !== 'false' && clothesArg !== '0';
+      }
+
+      let includeAccessories = !hasFlag('--no-accessories');
+      const accArg = getArgValue('--accessories');
+      if (accArg !== null) {
+        includeAccessories = accArg !== 'false' && accArg !== '0';
+      }
+
       const shirtColor = getArgValue('--shirt-color') || undefined;
       const pantsColor = getArgValue('--pants-color') || undefined;
       const shoesColor = getArgValue('--shoes-color') || undefined;
       const skinColor = getArgValue('--skin-color') || undefined;
+      const hairColor = getArgValue('--hair-color') || undefined;
+      const glassesColor = getArgValue('--glasses-color') || undefined;
+      const watchColor = getArgValue('--watch-color') || undefined;
 
       const human = generateRealisticHumanScene({
         includeClothing,
@@ -314,6 +327,9 @@ async function main() {
         pantsColor,
         shoesColor,
         skinColor,
+        hairColor,
+        glassesColor,
+        watchColor,
       });
 
       console.log(`[PolyForge Agent] Realistic Human generated: ${human.stats.totalVertices} vertices, ${human.stats.totalTriangles} triangles across ${human.stats.componentsCount} sub-assemblies.`);
