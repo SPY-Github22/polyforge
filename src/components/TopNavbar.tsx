@@ -13,6 +13,8 @@ import {
   Camera,
   FileCode,
   Shapes,
+  Sparkles,
+  Bot,
 } from 'lucide-react';
 import { CameraView, PrimitiveType, ShadingMode } from '../types';
 
@@ -36,6 +38,8 @@ interface TopNavbarProps {
   cameraView: CameraView;
   onChangeCameraView: (view: CameraView) => void;
   onOpenShortcuts: () => void;
+  isAIOpen: boolean;
+  onToggleAI: () => void;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -58,6 +62,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   cameraView,
   onChangeCameraView,
   onOpenShortcuts,
+  isAIOpen,
+  onToggleAI,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -313,6 +319,60 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                 ))}
               </div>
             )}
+            {/* AI Assistant Menu */}
+            <div className="relative">
+              <button
+                onClick={(e) => handleMenuClick(e, 'ai')}
+                className={`px-2.5 py-1 rounded hover:bg-studio-800 flex items-center gap-1 transition ${
+                  activeMenu === 'ai' || isAIOpen ? 'bg-sky-950/60 text-sky-400 border border-sky-800/60' : 'text-slate-300'
+                }`}
+              >
+                <Sparkles size={13} className="text-sky-400" /> AI
+              </button>
+              {activeMenu === 'ai' && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute left-0 mt-1 w-52 bg-studio-900 border border-studio-700 rounded-md shadow-2xl py-1 z-50 animate-in fade-in duration-100"
+                >
+                  <button
+                    onClick={() => {
+                      onToggleAI();
+                      setActiveMenu(null);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center justify-between text-sky-400 font-medium"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Sparkles size={13} /> Open AI Studio
+                    </span>
+                    <span className="text-[10px] text-slate-500">Ctrl+Shift+A</span>
+                  </button>
+                  <div className="h-px bg-studio-800 my-1" />
+                  <div className="px-3 py-1 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                    Quick AI Workflows
+                  </div>
+                  <button
+                    onClick={() => {
+                      onToggleAI();
+                      setActiveMenu(null);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-studio-800 text-slate-300 flex items-center gap-2"
+                  >
+                    <Bot size={13} className="text-blue-400" />
+                    <span>Prompt to 3D Synthesizer</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onToggleAI();
+                      setActiveMenu(null);
+                    }}
+                    className="w-full text-left px-3 py-1.5 hover:bg-studio-800 text-slate-300 flex items-center gap-2"
+                  >
+                    <FileCode size={13} className="text-emerald-400" />
+                    <span>JavaScript Code Studio</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -376,8 +436,21 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         </div>
       </div>
 
-      {/* Right side: Snapshot, Export GLB quick action, Help */}
+      {/* Right side: Snapshot, Export GLB quick action, AI Studio, Help */}
       <div className="flex items-center space-x-2">
+        <button
+          onClick={onToggleAI}
+          title="Open AI Studio (Ctrl+Shift+A)"
+          className={`px-2.5 py-1 rounded font-medium transition flex items-center gap-1.5 shadow ${
+            isAIOpen
+              ? 'bg-sky-500 text-white ring-2 ring-sky-400/50'
+              : 'bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white shadow-sky-950/40'
+          }`}
+        >
+          <Sparkles size={13} className="text-yellow-300 animate-pulse" />
+          <span>AI Studio</span>
+        </button>
+
         <button
           onClick={onCaptureSnapshot}
           title="Capture Render Snapshot (PNG)"

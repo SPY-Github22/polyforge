@@ -33,6 +33,7 @@ import { RightInspector } from './components/RightInspector';
 import { Timeline } from './components/Timeline';
 import { Viewport } from './components/Viewport';
 import { KeyboardShortcutsModal } from './components/KeyboardShortcutsModal';
+import { AIAssistantDrawer } from './components/AIAssistantDrawer';
 
 const DEFAULT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -102,6 +103,7 @@ export const App: React.FC = () => {
     objectsCount: 1,
   });
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
   const [, setHistoryTick] = useState(0);
 
   // Engine references
@@ -530,6 +532,45 @@ export const App: React.FC = () => {
     }
   };
 
+  // AI Assistant Scene Integration with Undo/Redo history
+  const handleApplySceneUpdate = useCallback(
+    (
+      newItems: SceneItem[],
+      newTracks: AnimationTrack[],
+      newEnv?: EnvironmentSettings,
+      newTimeline?: Partial<TimelineState>,
+      actionName: string = 'AI Scene Update'
+    ) => {
+      const prevItems = sceneItemsRef.current;
+      const prevTracks = tracks;
+      const prevEnv = environment;
+      const prevTimeline = timelineStateRef.current;
+
+      history.execute({
+        name: actionName,
+        undo: () => {
+          setSceneItems(prevItems);
+          setTracks(prevTracks);
+          setEnvironment(prevEnv);
+          if (newTimeline) {
+            setTimelineState(prevTimeline);
+          }
+          setSelectedId(prevItems.length > 0 ? prevItems[0].id : null);
+        },
+        redo: () => {
+          setSceneItems(newItems);
+          setTracks(newTracks);
+          if (newEnv) setEnvironment(newEnv);
+          if (newTimeline) {
+            setTimelineState((cur) => ({ ...cur, ...newTimeline }));
+          }
+          setSelectedId(newItems.length > 0 ? newItems[0].id : null);
+        },
+      });
+    },
+    [tracks, environment]
+  );
+
   // Keyboard Shortcuts Handler
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -564,6 +605,13 @@ export const App: React.FC = () => {
       if (e.ctrlKey && key === 's') {
         e.preventDefault();
         handleSaveProject();
+        return;
+      }
+
+      // AI Studio Toggle (Ctrl+Shift+A)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'a') {
+        e.preventDefault();
+        setIsAIOpen((prev) => !prev);
         return;
       }
 
@@ -667,6 +715,8 @@ export const App: React.FC = () => {
         cameraView={cameraView}
         onChangeCameraView={setCameraView}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
+        isAIOpen={isAIOpen}
+        onToggleAI={() => setIsAIOpen((prev) => !prev)}
       />
 
       {/* Main Workspace Row: Toolbar + Viewport + Inspector */}
@@ -757,6 +807,17 @@ export const App: React.FC = () => {
       <KeyboardShortcutsModal
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
+      />
+
+      {/* PolyForge AI Assistant Studio Drawer */}
+      <AIAssistantDrawer
+        isOpen={isAIOpen}
+        onClose={() => setIsAIOpen(false)}
+        sceneItems={sceneItems}
+        tracks={tracks}
+        environment={environment}
+        timelineState={timelineState}
+        onApplySceneUpdate={handleApplySceneUpdate}
       />
     </div>
   );

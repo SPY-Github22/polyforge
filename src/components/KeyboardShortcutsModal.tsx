@@ -46,6 +46,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       ],
     },
     {
+      category: 'AI Assistant & Automation',
+      items: [
+        { keys: ['Ctrl', 'Shift', 'A'], label: 'Toggle AI Studio Drawer' },
+      ],
+    },
+    {
       category: 'History & Project',
       items: [
         { keys: ['Ctrl', 'Z'], label: 'Undo Action' },

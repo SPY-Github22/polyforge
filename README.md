@@ -1,13 +1,88 @@
 # PolyForge Studio 🎨✨
 
-> **Next-Generation Web-Based 3D Modeling, Rigging, & Keyframe Animation Suite**
+> **Next-Generation Web-Based 3D Modeling, Rigging, Keyframe Animation & AI Generative Copilot Suite**
 
-PolyForge Studio is an open-source, zero-latency 3D modeling and animation platform built for modern creators. It runs entirely in your browser powered by WebGL/Three.js with hardware-accelerated PBR shading, real-time procedural modifiers, Blender-compatible hotkeys, and multi-format 3D export pipelines (GLTF/GLB, OBJ, STL).
+PolyForge Studio is an open-source, zero-latency 3D modeling and animation platform built for modern creators and AI agents. It runs entirely in your browser powered by WebGL/Three.js with hardware-accelerated PBR shading, real-time procedural modifiers, Blender-compatible hotkeys, multi-format 3D export pipelines (GLTF/GLB, OBJ, STL), and deep **AI Agent & LLM Integration** for automated 3D architecture, procedural synthesis, and programmatic keyframing.
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)]()
 [![Three.js](https://img.shields.io/badge/Three.js-r170-black.svg)]()
+[![AI Integration](https://img.shields.io/badge/AI_Copilot-Enabled-purple.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+## 🤖 AI Integration & Generative Copilot
+
+PolyForge Studio was built from the ground up to give Large Language Models (LLMs) and autonomous agents first-class programmatic and interactive access to 3D modeling, procedural architecture, and kinematic animation.
+
+### 1. 🧠 Interactive AI Studio Drawer (`Ctrl + Shift + A`)
+- **Prompt-to-3D Synthesizer**: Type natural language prompts like *"A cyberpunk neon citadel with floating counter-rotating rings"* or *"A solar system with Keplerian orbits"* to instantly architect 3D models and synchronized keyframe animations.
+- **Built-in Procedural AI Engine (Offline / Zero Setup)**: Runs rich mathematical procedural generators locally in the browser with zero API keys required.
+- **Code Studio & Script Editor**: Live JavaScript code editor with immediate execution in the 3D viewport, sample script library, and execution console.
+- **Agent / LLM Bridge**: One-click extraction of the full 3D scene graph and TypeScript API schema for external LLMs (Claude, ChatGPT, Gemini, Antigravity CLI) with instant script paste-and-run execution.
+- **Multi-Provider Support**: Connect custom API keys for OpenAI (GPT-4o), Anthropic Claude (3.5 Sonnet), local Ollama instances, or custom endpoints.
+
+### 2. ⚡ Programmatic Scripting API (`polyforge.*`)
+LLMs and developers have access to a clean, strongly-typed JavaScript runtime API:
+```javascript
+// Clear scene and configure cyberpunk environment
+polyforge.clearScene();
+polyforge.setEnvironment({ preset: 'cyberpunk', backgroundColor: '#05070d' });
+polyforge.setTimeline({ totalFrames: 120, fps: 30 });
+
+// Construct central glowing reactor
+const core = polyforge.createObject({
+  name: 'Quantum Reactor',
+  primitive: 'sphere',
+  position: [0, 2.5, 0],
+  scale: [1, 1, 1],
+  material: { color: '#06b6d4', emissive: '#06b6d4', emissiveIntensity: 2.5 }
+});
+
+// Create counter-rotating magnetic levitation ring
+const ring = polyforge.createObject({
+  name: 'Levitation Ring',
+  primitive: 'torus',
+  position: [0, 2.5, 0],
+  material: { color: '#ec4899', emissive: '#db2777', emissiveIntensity: 1.0, metalness: 0.9 },
+  geometryParams: { radius: 2.0, tube: 0.08 }
+});
+
+// Program keyframed continuous rotation
+polyforge.addKeyframe(ring.id, 0, { rotation: [Math.PI / 2, 0, 0] }, 'linear');
+polyforge.addKeyframe(ring.id, 120, { rotation: [Math.PI / 2, Math.PI * 2, 0] }, 'linear');
+```
+
+### 3. 🖥️ Headless Terminal CLI for Autonomous Agents
+Terminal agents and CI/CD pipelines can generate, script, and inspect 3D scenes without opening a browser:
+```bash
+# List all built-in procedural templates
+npm run polyforge -- list-templates
+
+# Generate a 3D model from a template
+npm run polyforge -- generate --template kinetic-mech --out ./mech.json
+
+# Synthesize a model directly from a natural language prompt
+npm run polyforge -- prompt "solar system orrery with planets" --out ./system.json
+
+# Execute a custom JavaScript script in headless sandbox
+npm run polyforge -- run-script ./my-script.js --out ./output.json
+
+# Inspect an existing scene's objects, materials, and animation tracks
+npm run polyforge -- inspect ./system.json
+```
+
+### 4. 🏛️ Flagship Deeply Architected Procedural Templates
+| Template ID | Name | Category | Description |
+| :--- | :--- | :--- | :--- |
+| `sci-fi-citadel` | Cyberpunk Citadel | Sci-Fi | Soaring spire, counter-rotating levitation rings, quantum core, and pulsing beacon |
+| `solar-orrery` | Solar System Orrery | Astronomy | Radiant rotating Sun, 4 orbiting terrestrial planets, and Saturn ring system |
+| `castle-fortress` | Medieval Castle Fortress | Architecture | 4 conical watchtowers, crenellated curtain walls, gatehouse portal, and central keep |
+| `kinetic-mech` | Articulated Kinetic Mech | Robotics | Armored chassis, glowing visor, and synchronized walking gait cycle keyframes |
+| `dna-helix` | Double-Helix DNA | Kinetics | 24 paired nucleotide rungs twisting along a parametric helix with continuous rotation |
+| `procedural-biome`| Low-Poly Pine Forest | Nature | Undulating terrain grid, stylized multi-tiered pine trees with wind sway, and monoliths |
+| `spiral-pavilion` | Parametric Spiral Pavilion | Architecture | Helical marble staircase, golden cupola dome, and ascending kinetic platform |
 
 ---
 
@@ -104,6 +179,8 @@ Production artifacts are emitted to the `dist/` directory.
 
 ```
 polyforge/
+├── cli/
+│   └── polyforge-agent.ts    # Headless CLI for terminal agents, scripting & model synthesis
 ├── src/
 │   ├── types/
 │   │   └── index.ts          # Strongly typed scene, transform, material, and keyframe interfaces
@@ -113,13 +190,20 @@ polyforge/
 │   │   ├── material.ts       # PBR shaders and procedural canvas texture generators
 │   │   ├── animation.ts      # Quaternion slerp, smoothstep easing, and turntable automation
 │   │   ├── io.ts             # GLTF/GLB, OBJ, STL, and Scene JSON exporters
-│   │   └── history.ts        # Undo/Redo command manager with stack bounds
+│   │   ├── history.ts        # Undo/Redo command manager with stack bounds
+│   │   └── ai/
+│   │       ├── types.ts      # AI API interfaces, script context, and template schemas
+│   │       ├── api.ts        # Script execution runtime (`polyforge.*`) & sandbox
+│   │       ├── procedural.ts # Flagship procedural model & kinematic animation synthesizers
+│   │       ├── llm.ts        # Scene graph serialization, prompt compiler, and provider clients
+│   │       └── sampleScripts.ts # Library of educational and generative 3D scripts
 │   ├── components/
-│   │   ├── TopNavbar.tsx     # Menus (File, Edit, Add), Shading modes, camera switchers
+│   │   ├── TopNavbar.tsx     # Menus (File, Edit, Add, AI), Shading modes, camera switchers
 │   │   ├── LeftToolbar.tsx   # Transform tools (G/R/S), quick primitive spawner, sculpting tools
 │   │   ├── RightInspector.tsx# Transform inputs, Material PBR, Modifiers, Scene Outliner, Environment
 │   │   ├── Timeline.tsx      # Animation scrubber, playhead, diamond keyframe markers
 │   │   ├── Viewport.tsx      # 3D canvas viewport, orientation compass, real-time FPS/tri counter
+│   │   ├── AIAssistantDrawer.tsx # AI Prompt-to-3D, Code Studio, and LLM bridge drawer
 │   │   └── KeyboardShortcutsModal.tsx # Blender shortcut guide
 │   ├── App.tsx               # Root application coordinator and keyboard events
 │   └── main.tsx              # Application mount point
@@ -127,7 +211,10 @@ polyforge/
 │   ├── geometry.test.ts      # Primitive creation and modifier verification
 │   ├── animation.test.ts     # Keyframe interpolation and turntable testing
 │   ├── io.test.ts            # Project serialization & error handling
-│   └── history.test.ts       # Undo/Redo stack verification
+│   ├── history.test.ts       # Undo/Redo stack verification
+│   ├── ai-scripting.test.ts  # Scripting API execution & error handling tests
+│   ├── ai-procedural.test.ts # Mathematical validity tests for all procedural generators
+│   └── ai-llm.test.ts        # Scene serialization & LLM prompt format tests
 └── vite.config.ts
 ```
 
