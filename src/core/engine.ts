@@ -265,6 +265,9 @@ export class Engine {
   public setCameraView(view: CameraView) {
     const target = this.orbitControls.target;
     const box = new THREE.Box3().setFromObject(this.userMeshGroup);
+    if (!box.isEmpty() && target.lengthSq() < 0.001) {
+      box.getCenter(target);
+    }
     const size = new THREE.Vector3();
     box.getSize(size);
     const maxDim = Math.max(size.x, size.y, size.z);
@@ -320,6 +323,12 @@ export class Engine {
       if (maxDim > 1.5) {
         const dir = new THREE.Vector3().subVectors(this.camera.position, center).normalize();
         if (dir.lengthSq() < 0.001) dir.set(0.65, 0.45, 0.85).normalize();
+        // Ensure camera has an elevated vantage angle looking down into the canopy,
+        // rather than pointing up into unlit branch undersides from the ground
+        if (dir.y < 0.28) {
+          dir.y = 0.35;
+          dir.normalize();
+        }
         const dist = Math.max(8, maxDim * 1.35);
         this.camera.position.copy(center).addScaledVector(dir, dist);
       }

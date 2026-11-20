@@ -128,14 +128,14 @@ function createBarkDataTexture(): THREE.DataTexture {
 
       if (hasMoss) {
         // Subtle sage-green lichen
-        data[idx] = 68;
-        data[idx + 1] = 88;
-        data[idx + 2] = 52;
+        data[idx] = 88;
+        data[idx + 1] = 112;
+        data[idx + 2] = 68;
       } else {
-        // Deep oak wood gradient from dark crevice (#1d1109) to outer bark ridge (#5c3e29)
-        data[idx] = Math.floor(25 + furrow * 68);
-        data[idx + 1] = Math.floor(16 + furrow * 46);
-        data[idx + 2] = Math.floor(10 + furrow * 30);
+        // Rich warm oak wood gradient from dark crevice (#26180f) to outer bark ridge (#734d31)
+        data[idx] = Math.floor(38 + furrow * 77);
+        data[idx + 1] = Math.floor(24 + furrow * 53);
+        data[idx + 2] = Math.floor(15 + furrow * 34);
       }
       data[idx + 3] = 255;
     }
@@ -161,14 +161,14 @@ function createFoliageDataTexture(variant: 'mature' | 'young'): THREE.DataTextur
 
   const isYoung = variant === 'young';
 
-  // Base colors
-  const baseR = isYoung ? 65 : 34;
-  const baseG = isYoung ? 132 : 78;
-  const baseB = isYoung ? 36 : 24;
+  // Base colors: rich lush chlorophyll tones for mature and fresh golden-green for young foliage
+  const baseR = isYoung ? 82 : 52;
+  const baseG = isYoung ? 165 : 120;
+  const baseB = isYoung ? 42 : 35;
 
-  const veinR = isYoung ? 102 : 62;
-  const veinG = isYoung ? 175 : 124;
-  const veinB = isYoung ? 54 : 38;
+  const veinR = isYoung ? 128 : 85;
+  const veinG = isYoung ? 210 : 168;
+  const veinB = isYoung ? 68 : 50;
 
   // We draw 2 oak leaves side-by-side in the texture atlas
   const leaves = [

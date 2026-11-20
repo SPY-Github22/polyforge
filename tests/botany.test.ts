@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { generateBotanicalOakTree } from '../src/core/botany';
 import { createPrimitiveGeometry, calculateGeometryStats } from '../src/core/geometry';
 import { exportSceneToOBJString } from '../src/core/io';
@@ -109,6 +110,37 @@ describe('Botanical Engine & High-Poly Tree Generator', () => {
     const result = generateBotanicalOakTree({ seed: 42 }); // Uses default leafCount 3800
     expect(result.stats.leafTriangles).toBeGreaterThanOrEqual(3500 * 4); // each spray has multiple triangles
     expect(result.stats.totalVertices).toBeGreaterThan(50000);
+    expect(result.matureLeavesItem.material.transmission).toBe(0);
+    expect(result.youngLeavesItem.material.transmission).toBe(0);
+
+    // Verify leaf triangle winding aligns with vertex normals (dot product > 0)
+    const positions = result.matureLeavesItem.geometryParams?.customGeometry?.positions!;
+    const normals = result.matureLeavesItem.geometryParams?.customGeometry?.normals!;
+    const indices = result.matureLeavesItem.geometryParams?.customGeometry?.indices!;
+
+    let positiveDotCount = 0;
+    const testCount = Math.min(100, indices.length / 3);
+    for (let t = 0; t < testCount; t++) {
+      const i0 = indices[t * 3];
+      const i1 = indices[t * 3 + 1];
+      const i2 = indices[t * 3 + 2];
+
+      const p0 = new THREE.Vector3(positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]);
+      const p1 = new THREE.Vector3(positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]);
+      const p2 = new THREE.Vector3(positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]);
+
+      const e1 = new THREE.Vector3().subVectors(p1, p0);
+      const e2 = new THREE.Vector3().subVectors(p2, p0);
+      const faceNormal = new THREE.Vector3().crossVectors(e1, e2).normalize();
+
+      const vNormal = new THREE.Vector3(normals[i0 * 3], normals[i0 * 3 + 1], normals[i0 * 3 + 2]).normalize();
+      const dot = faceNormal.dot(vNormal);
+      if (dot > 0.5) {
+        positiveDotCount++;
+      }
+    }
+    // 100% of tested leaf faces have face normal pointing along vertex normal
+    expect(positiveDotCount).toBe(testCount);
   });
 
   it('generates flared root buttresses that ground at y = 0 with outward flare', () => {

@@ -348,13 +348,13 @@ function createOakLeafSpray(
       const l2 = row2 + 1;
       const r2 = row2 + 2;
 
-      // Left wing: (l1, l2, c2) & (l1, c2, c1)
-      outIndices.push(l1, l2, c2);
-      outIndices.push(l1, c2, c1);
+      // Left wing: CCW when viewed along +leafUp to match vertex normals
+      outIndices.push(l1, c2, l2);
+      outIndices.push(l1, c1, c2);
 
-      // Right wing: (c1, c2, r2) & (c1, r2, r1)
-      outIndices.push(c1, c2, r2);
-      outIndices.push(c1, r2, r1);
+      // Right wing: CCW when viewed along +leafUp to match vertex normals
+      outIndices.push(c1, r2, c2);
+      outIndices.push(c1, r1, r2);
     }
   }
 }
@@ -696,8 +696,8 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
     // Scale variation: lush, overlapping foliage billows
     const curLeafScale = leafScale * THREE.MathUtils.lerp(0.85, 1.3, rng());
 
-    // Assign to Mature Oak Foliage (68%) or Young Sunlit Foliage (32%)
-    const isSunlitTip = anchor.sunExposure > 0.58 && rng() > 0.38;
+    // Assign to Mature Oak Foliage (68-70%) or Young Sunlit Foliage (30-32%) on exposed outer tips
+    const isSunlitTip = anchor.sunExposure > 0.65 && rng() > 0.60;
     if (isSunlitTip) {
       createOakLeafSpray(
         sprayOrigin,
@@ -751,8 +751,8 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
     roughness: 0.42,
     metalness: 0.06,
     emissive: '#081707',
-    emissiveIntensity: 0.05,
-    transmission: 0.15,
+    emissiveIntensity: 0.08,
+    transmission: 0,
     opacity: 1,
     transparent: false,
     wireframe: false,
@@ -767,8 +767,8 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
     roughness: 0.38,
     metalness: 0.04,
     emissive: '#0d2208',
-    emissiveIntensity: 0.08,
-    transmission: 0.22,
+    emissiveIntensity: 0.10,
+    transmission: 0,
     opacity: 1,
     transparent: false,
     wireframe: false,

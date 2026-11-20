@@ -503,12 +503,11 @@ export const App: React.FC = () => {
       setTracks(data.tracks || []);
       if (data.environment) setEnvironment(data.environment);
       setSelectedId(data.items.length > 0 ? data.items[0].id : null);
-      // Center orbit controls on the loaded model's bounding box center (y ≈ 4.5m for trees)
-      setTimeout(() => {
-        if (engineRef.current) {
-          engineRef.current.focusObject(null);
-        }
-      }, 60);
+      // Immediately populate engine meshes and center orbit controls on model bounding box center (y ≈ 4.5m)
+      if (engineRef.current) {
+        engineRef.current.syncSceneItems(data.items);
+        engineRef.current.focusObject(null);
+      }
     } catch (err) {
       alert(`Failed to load project file: ${err instanceof Error ? err.message : String(err)}`);
     }
