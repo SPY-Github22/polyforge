@@ -200,13 +200,19 @@ export const MCP_TOOLS = [
   },
   {
     name: 'polyforge_generate_bicycle',
-    description: 'Synthesize an ultra-realistic mechanically precise 3D road bicycle with diamond frame, drop handlebars, 32-spoke laced wheels, 11-speed drivetrain, continuous roller chain, disc brakes, and routed control cables',
+    description: 'Synthesize an ultra-realistic mechanically precise 3D road bicycle with diamond frame, dropped/flat handlebars, 32-spoke laced wheels, 11-speed drivetrain, continuous roller chain, disc brakes, and routed control cables',
     inputSchema: {
       type: 'object',
       properties: {
         frameColor: { type: 'string', description: 'Frame paint hex color (e.g. "#c01525")' },
         frameMaterial: { type: 'string', enum: ['gloss', 'matte', 'carbon'], description: 'Frame finish preset' },
+        handlebarStyle: { type: 'string', enum: ['drop', 'flat'], description: 'Handlebar cockpit style ("drop" or "flat")' },
+        pedalStyle: { type: 'string', enum: ['platform', 'clipless'], description: 'Pedal style ("platform" or "clipless")' },
+        wheelSize: { type: 'number', description: 'Outer wheel radius in meters (default 0.34 for 700c)' },
         spokeCount: { type: 'number', description: 'Number of spokes per wheel (default 32)' },
+        includeCables: { type: 'boolean', description: 'Include routed control cables (default true)' },
+        includeDiscBrakes: { type: 'boolean', description: 'Include 160mm vented disc rotors and calipers (default true)' },
+        includeReflectors: { type: 'boolean', description: 'Include amber safety reflectors (default true)' },
         clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
       },
     },
@@ -568,7 +574,13 @@ export class PolyForgeMCPServer {
         const bike = generateRealisticBicycle({
           frameColor: args.frameColor,
           frameMaterial: args.frameMaterial,
+          handlebarStyle: args.handlebarStyle,
+          pedalStyle: args.pedalStyle,
+          wheelSize: args.wheelSize,
           spokeCount: args.spokeCount,
+          includeCables: args.includeCables,
+          includeDiscBrakes: args.includeDiscBrakes,
+          includeReflectors: args.includeReflectors,
         });
 
         this.state.items.push(...bike.allItems);

@@ -44,7 +44,7 @@ Commands:
   prompt "<natural language>" [--out <f>]                  Synthesize a 3D model matching a prompt
   run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
   generate-tree [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic high-poly botanical oak tree
-  generate-bicycle [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic mechanically precise bicycle
+  generate-bicycle [--out <f>] [--format <obj|stl|glb|json>] [--handlebar <drop|flat>] [--pedals <platform|clipless>] [--spokes <n>] [--wheelsize <r>] Synthesize an ultra-realistic mechanically precise bicycle
   export <scene.json> --format <obj|stl|glb|json> [--out <f>] Export a scene to 3D geometry formats
   inspect <scene.json>                                    Display detailed summary and metrics of a scene file
   mcp                                                     Launch the Model Context Protocol stdio server
@@ -181,11 +181,18 @@ async function main() {
       console.log('[PolyForge Agent] Synthesizing ultra-realistic mechanically precise bicycle...');
       const frameColor = getArgValue('--frame-color') || '#c01525';
       const frameMaterial = (getArgValue('--frame-material') || 'gloss') as 'gloss' | 'matte' | 'carbon';
+      const handlebarStyle = (getArgValue('--handlebar') || 'drop') as 'drop' | 'flat';
+      const pedalStyle = (getArgValue('--pedals') || 'platform') as 'platform' | 'clipless';
       const spokeCount = parseInt(getArgValue('--spokes') || '32', 10);
+      const wheelSizeVal = getArgValue('--wheelsize');
+      const wheelSize = wheelSizeVal ? parseFloat(wheelSizeVal) : undefined;
 
       const bike = generateRealisticBicycle({
         frameColor,
         frameMaterial,
+        handlebarStyle,
+        pedalStyle,
+        wheelSize,
         spokeCount,
       });
 

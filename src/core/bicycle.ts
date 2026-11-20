@@ -168,7 +168,6 @@ function addBox(
   const hy = size.y * 0.5;
   const hz = size.z * 0.5;
 
-  // 6 faces: normal, u-axis, v-axis
   const faces = [
     { norm: new THREE.Vector3(1, 0, 0), u: new THREE.Vector3(0, 0, 1), v: new THREE.Vector3(0, 1, 0), su: hz, sv: hy, dist: hx },
     { norm: new THREE.Vector3(-1, 0, 0), u: new THREE.Vector3(0, 0, -1), v: new THREE.Vector3(0, 1, 0), su: hz, sv: hy, dist: hx },
@@ -261,9 +260,21 @@ function addSweptTube(
       const angle = Math.acos(dot);
       curN.applyAxisAngle(axis, angle);
     }
-    curN.sub(new THREE.Vector3().copy(curT).multiplyScalar(curN.dot(curT))).normalize();
+    const proj = curN.sub(new THREE.Vector3().copy(curT).multiplyScalar(curN.dot(curT)));
+    if (proj.lengthSq() > 0.0001) {
+      curN.copy(proj.normalize());
+    } else {
+      curN.copy(prevN);
+    }
     normals.push(curN);
-    binormals.push(new THREE.Vector3().crossVectors(curT, curN).normalize());
+
+    const binorm = new THREE.Vector3().crossVectors(curT, curN);
+    if (binorm.lengthSq() > 0.0001) {
+      binorm.normalize();
+    } else {
+      binorm.copy(binormals[i - 1]);
+    }
+    binormals.push(binorm);
   }
 
   const startVIdx = buf.positions.length / 3;
@@ -336,6 +347,7 @@ function addSweptTube(
 
 /**
  * Appends a mechanical gear sprocket with chamfered cog teeth and central hole.
+ * Generates planar manifold quads and a solid inner bore cylinder wall.
  */
 function addGearWheel(
   center: THREE.Vector3,
@@ -391,8 +403,8 @@ function addGearWheel(
     }
   }
 
-  // Bore hole rings front and back
-  const boreSteps = Math.min(24, toothCount * 2);
+  // Bore hole rings front and back matched 1:1 with steps to prevent crossed faces
+  const boreSteps = steps;
   const boreStartV = buf.positions.length / 3;
   for (let side = 0; side <= 1; side++) {
     const zOffset = side === 0 ? halfT : -halfT;
@@ -422,21 +434,21 @@ function addGearWheel(
     }
   }
 
-  // Front face quads connecting outer teeth to bore
   const stride = steps + 1;
-  for (let i = 0; i < steps; i++) {
-    const bIdx = Math.floor((i / steps) * boreSteps);
-    const bNext = (bIdx + 1) % (boreSteps + 1);
+  const boreStride = boreSteps + 1;
+  const backOuter = startV + stride;
+  const frontBore = boreStartV;
+  const backBore = boreStartV + boreStride;
 
+  // Front and Back faces
+  for (let i = 0; i < steps; i++) {
     // Front face
-    buf.indices.push(startV + i, startV + i + 1, boreStartV + bIdx);
-    buf.indices.push(startV + i + 1, boreStartV + bNext, boreStartV + bIdx);
+    buf.indices.push(startV + i, startV + i + 1, frontBore + i);
+    buf.indices.push(startV + i + 1, frontBore + i + 1, frontBore + i);
 
     // Back face (reverse winding)
-    const backOuter = startV + stride;
-    const backBore = boreStartV + (boreSteps + 1);
-    buf.indices.push(backOuter + i + 1, backOuter + i, backBore + bIdx);
-    buf.indices.push(backBore + bNext, backOuter + i + 1, backBore + bIdx);
+    buf.indices.push(backOuter + i + 1, backOuter + i, backBore + i);
+    buf.indices.push(backBore + i + 1, backOuter + i + 1, backBore + i);
   }
 
   // Tooth perimeter side walls
@@ -449,10 +461,22 @@ function addGearWheel(
     buf.indices.push(fA, bA, bB);
     buf.indices.push(fA, bB, fB);
   }
+
+  // Inner bore cylinder side wall (watertight solid)
+  for (let i = 0; i < boreSteps; i++) {
+    const fA = frontBore + i;
+    const fB = frontBore + i + 1;
+    const bA = backBore + i;
+    const bB = backBore + i + 1;
+
+    buf.indices.push(fA, bB, bA);
+    buf.indices.push(fA, fB, bB);
+  }
 }
 
 /**
- * Appends a torus/ring (used for rims, tires, headset bearing races).
+ * Appends a torus/ring (used for tires, headset bearing races).
+ * Supports realistic tire UV mapping with tread center at u=0.5 and lateral sidewalls.
  */
 function addTorus(
   center: THREE.Vector3,
@@ -462,7 +486,8 @@ function addTorus(
   tubularSeg: number,
   buf: GeometryBuffer,
   normalAxis: 'x' | 'y' | 'z' = 'z',
-  tint: number = 1.0
+  tint: number = 1.0,
+  isTire: boolean = false
 ): void {
   const startV = buf.positions.length / 3;
 
@@ -498,7 +523,16 @@ function addTorus(
 
       buf.positions.push(px, py, pz);
       buf.normals.push(nx, ny, nz);
-      buf.uvs.push(i / tubularSeg, j / radialSeg);
+
+      if (isTire) {
+        // Map cross section so vAngle=0 (outer road contact) is u=0.5,
+        // and lateral sidewalls are at u=0.75 and u=0.25.
+        const crossU = (vAngle / (Math.PI * 2) + 0.5) % 1.0;
+        buf.uvs.push(crossU, i / tubularSeg);
+      } else {
+        buf.uvs.push(i / tubularSeg, j / radialSeg);
+      }
+
       if (buf.colors) buf.colors.push(tint, tint, tint);
     }
   }
@@ -518,15 +552,194 @@ function addTorus(
 }
 
 /**
+ * Appends an authentic 45mm deep-section carbon aerodynamic rim.
+ * Features tire bead bed, vertical brake tracks, and aerodynamic V-taper to the spoke bed.
+ */
+function addAeroRim(
+  center: THREE.Vector3,
+  beadRadius: number,
+  depth: number,
+  outerWidth: number,
+  spokeBedWidth: number,
+  segments: number,
+  buf: GeometryBuffer,
+  tint: number = 0.16
+): void {
+  const innerRadius = beadRadius - depth;
+  const halfOuterW = outerWidth * 0.5;
+  const halfInnerW = spokeBedWidth * 0.5;
+
+  const profile = [
+    { r: beadRadius, z: -halfOuterW },
+    { r: beadRadius - 0.010, z: -halfOuterW }, // Brake track
+    { r: innerRadius + 0.006, z: -halfInnerW }, // Aero taper
+    { r: innerRadius, z: 0 },                  // Inner spoke apex
+    { r: innerRadius + 0.006, z: halfInnerW },  // Aero taper other side
+    { r: beadRadius - 0.010, z: halfOuterW },  // Brake track
+    { r: beadRadius, z: halfOuterW },
+  ];
+
+  const numProfilePts = profile.length;
+  const startV = buf.positions.length / 3;
+
+  for (let s = 0; s <= segments; s++) {
+    const angle = (s / segments) * Math.PI * 2;
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+
+    for (let p = 0; p < numProfilePts; p++) {
+      const pt = profile[p];
+      const px = center.x + cosA * pt.r;
+      const py = center.y + sinA * pt.r;
+      const pz = center.z + pt.z;
+
+      const prevPt = profile[Math.max(0, p - 1)];
+      const nextPt = profile[Math.min(numProfilePts - 1, p + 1)];
+      const dr = nextPt.r - prevPt.r;
+      const dz = nextPt.z - prevPt.z;
+      let nr = -dz;
+      let nz = dr;
+      const nlen = Math.hypot(nr, nz);
+      if (nlen > 0.0001) { nr /= nlen; nz /= nlen; }
+
+      buf.positions.push(px, py, pz);
+      buf.normals.push(cosA * nr, sinA * nr, nz);
+      buf.uvs.push(p / (numProfilePts - 1), (s / segments) * 6);
+      if (buf.colors) buf.colors.push(tint, tint, tint);
+    }
+  }
+
+  const stride = numProfilePts;
+  for (let s = 0; s < segments; s++) {
+    for (let p = 0; p < numProfilePts - 1; p++) {
+      const a = startV + s * stride + p;
+      const b = startV + (s + 1) * stride + p;
+      const c = startV + (s + 1) * stride + (p + 1);
+      const d = startV + s * stride + (p + 1);
+
+      buf.indices.push(a, b, d);
+      buf.indices.push(b, c, d);
+    }
+  }
+}
+
+/**
+ * Appends an authentic 160mm vented stainless steel disc brake rotor.
+ * Features circular braking track with ventilation slots, 6-bolt mounting spider,
+ * and 6 stainless Torx bolts.
+ */
+function addDiscBrakeRotor(
+  center: THREE.Vector3,
+  radius: number = 0.080,
+  buf: GeometryBuffer,
+  tint: number = 0.95
+): void {
+  const outerR = radius;
+  const innerTrackR = radius * 0.80; // 16mm wide braking band
+  const spiderR = radius * 0.44;     // Central mounting spider
+  const boltCircleR = radius * 0.30; // 6-bolt mounting circle
+  const centerHoleR = radius * 0.18; // Hub bore hole
+  const thickness = 0.002;
+  const halfT = thickness * 0.5;
+
+  // 1. Braking track ring
+  const trackSegs = 36;
+  const trackStartV = buf.positions.length / 3;
+
+  for (let side = 0; side <= 1; side++) {
+    const zOffset = side === 0 ? halfT : -halfT;
+    const normZ = side === 0 ? 1 : -1;
+
+    for (let s = 0; s <= trackSegs; s++) {
+      const angle = (s / trackSegs) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      // Inner track ring
+      buf.positions.push(center.x + cosA * innerTrackR, center.y + sinA * innerTrackR, center.z + zOffset);
+      buf.normals.push(0, 0, normZ);
+      buf.uvs.push(0.5 + cosA * 0.38, 0.5 + sinA * 0.38);
+      if (buf.colors) buf.colors.push(tint, tint, tint);
+
+      // Outer track ring
+      buf.positions.push(center.x + cosA * outerR, center.y + sinA * outerR, center.z + zOffset);
+      buf.normals.push(0, 0, normZ);
+      buf.uvs.push(0.5 + cosA * 0.5, 0.5 + sinA * 0.5);
+      if (buf.colors) buf.colors.push(tint, tint, tint);
+    }
+  }
+
+  const ptsPerSide = (trackSegs + 1) * 2;
+  const frontTrack = trackStartV;
+  const backTrack = trackStartV + ptsPerSide;
+
+  for (let s = 0; s < trackSegs; s++) {
+    const fInA = frontTrack + s * 2;
+    const fOutA = frontTrack + s * 2 + 1;
+    const fInB = frontTrack + (s + 1) * 2;
+    const fOutB = frontTrack + (s + 1) * 2 + 1;
+
+    buf.indices.push(fInA, fOutA, fOutB);
+    buf.indices.push(fInA, fOutB, fInB);
+
+    const bInA = backTrack + s * 2;
+    const bOutA = backTrack + s * 2 + 1;
+    const bInB = backTrack + (s + 1) * 2;
+    const bOutB = backTrack + (s + 1) * 2 + 1;
+
+    buf.indices.push(bInA, bInB, bOutB);
+    buf.indices.push(bInA, bOutB, bOutA);
+
+    // Outer edge
+    buf.indices.push(fOutA, bOutA, bOutB);
+    buf.indices.push(fOutA, bOutB, fOutB);
+
+    // Inner track edge
+    buf.indices.push(fInA, fInB, bInB);
+    buf.indices.push(fInA, bInB, bInA);
+  }
+
+  // 2. Central hub mounting ring
+  addGearWheel(center, 12, spiderR, thickness, centerHoleR, buf, 'z', tint * 0.9);
+
+  // 3. 6 Spider Arms connecting hub ring to braking track
+  for (let arm = 0; arm < 6; arm++) {
+    const armAngle = (arm / 6) * Math.PI * 2;
+    const cosA = Math.cos(armAngle);
+    const sinA = Math.sin(armAngle);
+
+    const innerArmPt = new THREE.Vector3(center.x + cosA * (spiderR - 0.002), center.y + sinA * (spiderR - 0.002), center.z);
+    const outerArmPt = new THREE.Vector3(
+      center.x + Math.cos(armAngle + 0.12) * innerTrackR,
+      center.y + Math.sin(armAngle + 0.12) * innerTrackR,
+      center.z
+    );
+
+    addCylinder(innerArmPt, outerArmPt, 0.0035, 0.004, 8, buf, true, true, tint);
+
+    // 6 Torx Mounting Bolts
+    const boltPt = new THREE.Vector3(
+      center.x + Math.cos(armAngle) * boltCircleR,
+      center.y + Math.sin(armAngle) * boltCircleR,
+      center.z + halfT + 0.001
+    );
+    addCylinder(boltPt, new THREE.Vector3(boltPt.x, boltPt.y, boltPt.z + 0.002), 0.003, 0.003, 8, buf, true, true, 0.98);
+  }
+}
+
+/**
  * Generates an ultra-realistic, mechanically precise 3D model of a bicycle.
- * Contains diamond frame, aero fork, cockpit, laced wheels, 11-speed drivetrain,
- * saddle & seatpost, and realistic routed control cables.
+ * Contains diamond road frame, aero fork, cockpit, laced wheels, 11-speed drivetrain,
+ * solid anatomical saddle & seatpost, and realistic routed control cables.
  */
 export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleResult {
-  const frameColor = options.frameColor ?? '#c01525'; // Classic racing carmine red
+  const frameColor = options.frameColor ?? '#c01525';
   const frameMatType = options.frameMaterial ?? 'gloss';
   const componentsColor = options.componentsColor ?? '#dce3eb';
-  const spokeCount = options.spokeCount ?? 32;
+  const handlebarStyle = options.handlebarStyle ?? 'drop';
+  const pedalStyle = options.pedalStyle ?? 'platform';
+  const wheelRadius = Math.max(0.20, options.wheelSize ?? 0.340);
+  const spokeCount = Math.max(0, Math.floor((options.spokeCount ?? 32) / 2) * 2);
   const includeCables = options.includeCables ?? true;
   const includeDiscBrakes = options.includeDiscBrakes ?? true;
   const includeReflectors = options.includeReflectors ?? true;
@@ -543,15 +756,14 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   // KEY MECHANICAL DATUMS (ISO 4210 Proportions)
   // All units in meters. y = 0 is ground plane.
   // ==========================================
-  const wheelRadius = 0.340; // 700x28c wheel outer radius touches ground at y = 0
   const rearAxle = new THREE.Vector3(-0.430, wheelRadius, 0.0);
   const frontAxle = new THREE.Vector3(0.570, wheelRadius, 0.0); // 1.00m wheelbase
-  const bbCenter = new THREE.Vector3(0.000, 0.280, 0.0); // 60mm BB drop
-  const seatCluster = new THREE.Vector3(-0.160, 0.770, 0.0); // 73.5° seat tube angle
-  const headTubeBottom = new THREE.Vector3(0.460, 0.690, 0.0);
-  const headTubeTop = new THREE.Vector3(0.415, 0.885, 0.0); // 73° head tube angle
-  const stemClamp = new THREE.Vector3(0.408, 0.920, 0.0);
-  const handlebarCenter = new THREE.Vector3(0.505, 0.950, 0.0);
+  const bbCenter = new THREE.Vector3(0.000, wheelRadius - 0.060, 0.0); // 60mm BB drop
+  const seatCluster = new THREE.Vector3(-0.160, wheelRadius + 0.430, 0.0); // 73.5° seat tube angle
+  const headTubeBottom = new THREE.Vector3(0.460, wheelRadius + 0.350, 0.0);
+  const headTubeTop = new THREE.Vector3(0.415, wheelRadius + 0.545, 0.0); // 73° head tube angle
+  const stemClamp = new THREE.Vector3(0.408, headTubeTop.y + 0.035, 0.0);
+  const handlebarCenter = new THREE.Vector3(0.505, headTubeTop.y + 0.065, 0.0);
 
   // ==========================================
   // 1. FRAME ASSEMBLY
@@ -575,7 +787,6 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
 
   // Head Tube (hydroformed with flared integrated bearing cups)
   addCylinder(headTubeBottom, headTubeTop, 0.025, 0.023, 16, frameBuf);
-  // Upper & lower headset bearing race flares
   addTorus(headTubeBottom, 0.025, 0.004, 8, 16, frameBuf, 'y');
   addTorus(headTubeTop, 0.023, 0.004, 8, 16, frameBuf, 'y');
 
@@ -588,15 +799,15 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   for (let i = 0; i <= dtSteps; i++) {
     const f = i / dtSteps;
     const pt = new THREE.Vector3().lerpVectors(bbCenter, headTubeBottom, f);
-    pt.y += Math.sin(f * Math.PI) * 0.008; // Subtle ergonomic curve
+    pt.y += Math.sin(f * Math.PI) * 0.008;
     dtPath.push(pt);
   }
   addSweptTube(dtPath, (t) => 0.022 + 0.006 * Math.sin(t * Math.PI), 14, frameBuf);
 
-  // Dual Chainstays (BB shell to rear dropouts, dimpled for tire & 50T chainring clearance)
+  // Dual Chainstays (BB shell to rear dropouts, dimpled for tire & chainring clearance)
   for (const side of [-1, 1]) {
     const startPt = new THREE.Vector3(bbCenter.x, bbCenter.y, side * 0.030);
-    const midPt = new THREE.Vector3(-0.210, 0.305, side * 0.045);
+    const midPt = new THREE.Vector3(-0.210, bbCenter.y + 0.025, side * 0.045);
     const endPt = new THREE.Vector3(rearAxle.x, rearAxle.y, side * 0.065);
     addSweptTube([startPt, midPt, endPt], (t) => 0.014 - 0.004 * t, 12, frameBuf);
   }
@@ -609,19 +820,19 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   }
 
   // Seatstay Brake/Stiffener Bridge
+  const bridgeY = (seatCluster.y + rearAxle.y) * 0.48;
   addCylinder(
-    new THREE.Vector3(-0.355, 0.465, -0.032),
-    new THREE.Vector3(-0.355, 0.465, 0.032),
+    new THREE.Vector3(-0.355, bridgeY, -0.032),
+    new THREE.Vector3(-0.355, bridgeY, 0.032),
     0.006, 0.006, 10, frameBuf
   );
 
-  // Rear CNC Dropouts (axle clamping plates + drive-side derailleur hanger)
+  // Rear CNC Dropouts & Derailleur Hanger
   for (const side of [-1, 1]) {
     const dropCenter = new THREE.Vector3(rearAxle.x, rearAxle.y, side * 0.066);
     addBox(dropCenter, new THREE.Vector3(0.042, 0.032, 0.006), new THREE.Euler(0, 0, -0.2), frameBuf, 0.85);
 
     if (side === 1) {
-      // Rear Derailleur Hanger extending down from right dropout
       const hangerPos = new THREE.Vector3(rearAxle.x + 0.008, rearAxle.y - 0.028, 0.068);
       addBox(hangerPos, new THREE.Vector3(0.016, 0.030, 0.005), new THREE.Euler(0, 0, 0.15), frameBuf, 0.80);
     }
@@ -638,7 +849,7 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   // 2. FORK & COCKPIT ASSEMBLY
   // ==========================================
   // Steerer Tube & Headset Spacers
-  addCylinder(headTubeTop, stemClamp, 0.014, 0.014, 14, forkCockpitBuf, true, true, 0.2); // Carbon spacers
+  addCylinder(headTubeTop, stemClamp, 0.014, 0.014, 14, forkCockpitBuf, true, true, 0.2);
   // Top Cap with M5 preload bolt
   addCylinder(
     stemClamp,
@@ -646,7 +857,7 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     0.016, 0.016, 14, forkCockpitBuf, true, true, 0.9
   );
 
-  // Fork Crown (just below head tube bottom)
+  // Fork Crown
   const forkCrown = new THREE.Vector3(headTubeBottom.x + 0.005, headTubeBottom.y - 0.018, 0);
   addCylinder(
     new THREE.Vector3(forkCrown.x, forkCrown.y, -0.028),
@@ -654,19 +865,24 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     0.016, 0.016, 12, forkCockpitBuf, true, true, 0.85
   );
 
-  // Dual Aerodynamic Fork Blades (smooth forward rake curve to front axle)
+  // Dual Aerodynamic Fork Blades (forward rake curve to front dropouts)
   for (const side of [-1, 1]) {
     const bladeStart = new THREE.Vector3(forkCrown.x, forkCrown.y, side * 0.024);
-    const bladeMid = new THREE.Vector3(0.525, 0.490, side * 0.038);
+    const bladeMid = new THREE.Vector3(0.525, wheelRadius + 0.150, side * 0.038);
     const bladeEnd = new THREE.Vector3(frontAxle.x, frontAxle.y, side * 0.052);
     addSweptTube([bladeStart, bladeMid, bladeEnd], (t) => 0.016 - 0.007 * t, 12, forkCockpitBuf);
 
-    // Front Dropouts at fork blade tips
     addBox(bladeEnd, new THREE.Vector3(0.030, 0.024, 0.006), new THREE.Euler(0, 0, 0.35), forkCockpitBuf, 0.85);
   }
 
-  // Handlebar Stem (110mm CNC alloy body + 4-bolt faceplate)
+  // Handlebar Stem (110mm CNC alloy body + steerer collar + 4-bolt faceplate)
   addCylinder(stemClamp, handlebarCenter, 0.018, 0.016, 14, forkCockpitBuf, true, true, 0.88);
+  // Stem steerer clamp collar
+  addCylinder(
+    new THREE.Vector3(stemClamp.x, stemClamp.y - 0.012, 0),
+    new THREE.Vector3(stemClamp.x, stemClamp.y + 0.012, 0),
+    0.019, 0.019, 14, forkCockpitBuf, true, true, 0.90
+  );
   // Stem Faceplate clamping handlebar
   addCylinder(
     new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, -0.022),
@@ -681,43 +897,83 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     }
   }
 
-  // Road Drop Handlebars (31.8mm clamp, tops, reach, drops, and bar tape)
-  const barWidth = 0.420;
-  const halfBar = barWidth * 0.5;
+  // Handlebars & Controls (Supports both 'drop' and 'flat' styles)
+  let leftLeverPos: THREE.Vector3;
+  let rightLeverPos: THREE.Vector3;
 
-  for (const side of [-1, 1]) {
-    const sign = side;
-    // Handlebar curve points: center -> top out -> forward bend -> downward drop -> tail
-    const p0 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, 0);
-    const p1 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, sign * 0.120);
-    const p2 = new THREE.Vector3(handlebarCenter.x + 0.025, handlebarCenter.y, sign * (halfBar - 0.025));
-    const p3 = new THREE.Vector3(handlebarCenter.x + 0.075, handlebarCenter.y - 0.020, sign * halfBar);
-    const p4 = new THREE.Vector3(handlebarCenter.x + 0.065, handlebarCenter.y - 0.090, sign * halfBar);
-    const p5 = new THREE.Vector3(handlebarCenter.x - 0.035, handlebarCenter.y - 0.125, sign * halfBar);
+  if (handlebarStyle === 'flat') {
+    // Flat / Commuter Riser Handlebar (660mm width with 5° backsweep and 15mm rise)
+    const flatBarHalf = 0.330;
+    for (const side of [-1, 1]) {
+      const sign = side;
+      const b0 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, 0);
+      const b1 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, sign * 0.050);
+      const b2 = new THREE.Vector3(handlebarCenter.x - 0.015, handlebarCenter.y + 0.012, sign * 0.180);
+      const b3 = new THREE.Vector3(handlebarCenter.x - 0.035, handlebarCenter.y + 0.015, sign * flatBarHalf);
 
-    addSweptTube([p0, p1, p2, p3, p4, p5], () => 0.0125, 12, forkCockpitBuf, false, true, 0.15); // Black textured tape
+      addSweptTube([b0, b1, b2, b3], () => 0.011, 12, forkCockpitBuf, false, true, 0.90);
 
-    // Bar end plug
-    addCylinder(p5, new THREE.Vector3(p5.x - 0.008, p5.y, p5.z), 0.011, 0.011, 10, forkCockpitBuf, true, true, 0.85);
+      // Lock-on ergonomic rubber grips on bar ends (130mm long)
+      const gripStart = new THREE.Vector3(handlebarCenter.x - 0.022, handlebarCenter.y + 0.014, sign * (flatBarHalf - 0.130));
+      const gripEnd = b3;
+      addCylinder(gripStart, gripEnd, 0.015, 0.015, 12, forkCockpitBuf, true, true, 0.12);
+      // Aluminum lock-on collar rings
+      addCylinder(gripStart, new THREE.Vector3().lerpVectors(gripStart, gripEnd, 0.06), 0.016, 0.016, 12, forkCockpitBuf, true, true, 0.85);
+      addCylinder(new THREE.Vector3().lerpVectors(gripEnd, gripStart, 0.06), gripEnd, 0.016, 0.016, 12, forkCockpitBuf, true, true, 0.85);
 
-    // Dual Brake/Shift Hoods & Levers (STI Ergonomic Shifters)
-    const hoodBase = new THREE.Vector3(p3.x - 0.010, p3.y + 0.015, sign * halfBar);
-    const hoodNose = new THREE.Vector3(p3.x + 0.055, p3.y + 0.030, sign * halfBar);
-    // Rubber hood body
-    addCylinder(hoodBase, hoodNose, 0.018, 0.014, 10, forkCockpitBuf, true, true, 0.12);
+      // Flat-bar 2-finger brake levers
+      const leverClampPos = new THREE.Vector3(handlebarCenter.x - 0.020, handlebarCenter.y + 0.013, sign * (flatBarHalf - 0.145));
+      addCylinder(
+        new THREE.Vector3(leverClampPos.x, leverClampPos.y, leverClampPos.z - 0.008),
+        new THREE.Vector3(leverClampPos.x, leverClampPos.y, leverClampPos.z + 0.008),
+        0.014, 0.014, 10, forkCockpitBuf, true, true, 0.80
+      );
+      // Lever blade extending forward and angled down
+      const leverTip = new THREE.Vector3(leverClampPos.x + 0.065, leverClampPos.y - 0.020, sign * (flatBarHalf - 0.125));
+      addCylinder(leverClampPos, leverTip, 0.006, 0.004, 8, forkCockpitBuf, true, true, 0.95);
+    }
 
-    // Contoured aluminum brake lever blade
-    const leverPivot = new THREE.Vector3(hoodNose.x - 0.015, hoodNose.y - 0.010, sign * (halfBar + 0.006 * sign));
-    const leverTip = new THREE.Vector3(leverPivot.x - 0.025, leverPivot.y - 0.095, leverPivot.z);
-    addCylinder(leverPivot, leverTip, 0.007, 0.004, 10, forkCockpitBuf, true, true, 0.95);
+    leftLeverPos = new THREE.Vector3(handlebarCenter.x + 0.035, handlebarCenter.y - 0.005, -0.180);
+    rightLeverPos = new THREE.Vector3(handlebarCenter.x + 0.035, handlebarCenter.y - 0.005, 0.180);
+  } else {
+    // Road Drop Handlebars (420mm width with reach, drops, and bar tape)
+    const barWidth = 0.420;
+    const halfBar = barWidth * 0.5;
+
+    for (const side of [-1, 1]) {
+      const sign = side;
+      const p0 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, 0);
+      const p1 = new THREE.Vector3(handlebarCenter.x, handlebarCenter.y, sign * 0.120);
+      const p2 = new THREE.Vector3(handlebarCenter.x + 0.025, handlebarCenter.y, sign * (halfBar - 0.025));
+      const p3 = new THREE.Vector3(handlebarCenter.x + 0.075, handlebarCenter.y - 0.020, sign * halfBar);
+      const p4 = new THREE.Vector3(handlebarCenter.x + 0.065, handlebarCenter.y - 0.090, sign * halfBar);
+      const p5 = new THREE.Vector3(handlebarCenter.x - 0.035, handlebarCenter.y - 0.125, sign * halfBar);
+
+      addSweptTube([p0, p1, p2, p3, p4, p5], () => 0.0125, 12, forkCockpitBuf, false, true, 0.15);
+
+      // Bar end plug
+      addCylinder(p5, new THREE.Vector3(p5.x - 0.008, p5.y, p5.z), 0.011, 0.011, 10, forkCockpitBuf, true, true, 0.85);
+
+      // Dual Brake/Shift Hoods & Levers (STI Ergonomic Shifters)
+      const hoodBase = new THREE.Vector3(p3.x - 0.010, p3.y + 0.015, sign * halfBar);
+      const hoodNose = new THREE.Vector3(p3.x + 0.055, p3.y + 0.030, sign * halfBar);
+      addCylinder(hoodBase, hoodNose, 0.018, 0.014, 10, forkCockpitBuf, true, true, 0.12);
+
+      // Contoured aluminum brake lever blade
+      const leverPivot = new THREE.Vector3(hoodNose.x - 0.015, hoodNose.y - 0.010, sign * (halfBar + 0.006 * sign));
+      const leverTip = new THREE.Vector3(leverPivot.x - 0.025, leverPivot.y - 0.095, leverPivot.z);
+      addCylinder(leverPivot, leverTip, 0.007, 0.004, 10, forkCockpitBuf, true, true, 0.95);
+    }
+
+    leftLeverPos = new THREE.Vector3(handlebarCenter.x + 0.045, handlebarCenter.y + 0.025, -halfBar);
+    rightLeverPos = new THREE.Vector3(handlebarCenter.x + 0.045, handlebarCenter.y + 0.025, halfBar);
   }
 
   // ==========================================
   // 3. WHEELS ASSEMBLY (FRONT & REAR)
   // ==========================================
-  const rimRadius = 0.312; // 700c bead seat radius
-  const rimCrossRad = 0.016; // Deep section rim profile
-  const tireCrossRad = 0.020; // 28c tire cross section
+  const rimRadius = wheelRadius - 0.028; // Bead radius
+  const tireCrossRad = 0.020;            // 28c tire cross section
 
   const wheels = [
     { name: 'front', center: frontAxle, isRear: false },
@@ -727,32 +983,29 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   for (const w of wheels) {
     const c = w.center;
 
-    // 700c Rubber Clincher Tire with tread
-    addTorus(c, rimRadius + tireCrossRad * 0.9, tireCrossRad, 14, 48, wheelsBuf, 'z', 0.20);
+    // 700c Rubber Clincher Tire with tread and competition tan sidewalls
+    addTorus(c, rimRadius + tireCrossRad * 0.9, tireCrossRad, 14, 48, wheelsBuf, 'z', 1.0, true);
 
     // Deep-Section 45mm Aero Carbon Rim
-    addTorus(c, rimRadius, rimCrossRad, 12, 48, wheelsBuf, 'z', 0.15);
+    addAeroRim(c, rimRadius, 0.045, 0.025, 0.014, 48, wheelsBuf, 0.16);
 
     // Presta Valve Stem & Knurled Brass Nut
     const valveBase = new THREE.Vector3(c.x, c.y + rimRadius - 0.012, c.z);
     const valveTip = new THREE.Vector3(c.x, c.y + rimRadius - 0.052, c.z);
     addCylinder(valveBase, valveTip, 0.003, 0.003, 8, wheelsBuf, true, true, 0.90);
-    // Valve cap
     addCylinder(valveTip, new THREE.Vector3(c.x, c.y + rimRadius - 0.062, c.z), 0.0035, 0.0035, 8, wheelsBuf, true, true, 0.85);
 
-    // Wheel Hub (CNC alloy central barrel, left & right high spoke flanges, thru-axle)
+    // Wheel Hub (CNC alloy central barrel, high spoke flanges, thru-axle)
     const flangeOffset = w.isRear ? 0.028 : 0.035;
     const hubShellRad = 0.016;
     const flangeRad = 0.032;
 
-    // Center hub barrel
     addCylinder(
       new THREE.Vector3(c.x, c.y, -flangeOffset),
       new THREE.Vector3(c.x, c.y, flangeOffset),
       hubShellRad, hubShellRad, 16, wheelsBuf, true, true, 0.92
     );
 
-    // High spoke flanges (left and right)
     for (const side of [-1, 1]) {
       const flgZ = side * (w.isRear && side === 1 ? flangeOffset * 0.75 : flangeOffset);
       addCylinder(
@@ -762,21 +1015,19 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
       );
     }
 
-    // Thru-axle & end caps
     addCylinder(
       new THREE.Vector3(c.x, c.y, -0.068),
       new THREE.Vector3(c.x, c.y, 0.068),
       0.007, 0.007, 12, wheelsBuf, true, true, 0.88
     );
 
-    // 32 Laced Tangent & Radial Spokes with Brass Nipples
+    // Laced Tangent & Radial Spokes with Brass Nipples
     const numSpokes = spokeCount;
     for (let s = 0; s < numSpokes; s++) {
       const isRightFlange = s % 2 === 0;
       const flgSign = isRightFlange ? 1 : -1;
       const flgZ = flgSign * (w.isRear && isRightFlange ? flangeOffset * 0.75 : flangeOffset);
 
-      // Flange angle with cross-lacing tangent offset
       const isCrossPush = Math.floor(s / 2) % 2 === 0;
       const tangentOffset = isCrossPush ? 0.22 : -0.22;
 
@@ -788,25 +1039,22 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
       const hubY = c.y + Math.sin(hubAngle) * (flangeRad - 0.003);
       const hubPt = new THREE.Vector3(hubX, hubY, flgZ);
 
-      const rimX = c.x + Math.cos(rimAngle) * (rimRadius - 0.010);
-      const rimY = c.y + Math.sin(rimAngle) * (rimRadius - 0.010);
+      const rimX = c.x + Math.cos(rimAngle) * (rimRadius - 0.040);
+      const rimY = c.y + Math.sin(rimAngle) * (rimRadius - 0.040);
       const rimPt = new THREE.Vector3(rimX, rimY, flgSign * 0.003);
 
-      // Stainless steel spoke wire (1.8mm gauge)
       addCylinder(hubPt, rimPt, 0.0009, 0.0009, 6, wheelsBuf, false, false, 0.98);
 
-      // Brass spoke nipple at rim bed
-      const nippleBase = new THREE.Vector3().lerpVectors(rimPt, hubPt, 0.025);
+      const nippleBase = new THREE.Vector3().lerpVectors(rimPt, hubPt, 0.035);
       addCylinder(rimPt, nippleBase, 0.0022, 0.0022, 6, wheelsBuf, true, true, 0.85);
     }
 
     // 160mm Vented Stainless Steel Disc Brake Rotors & Calipers
     if (includeDiscBrakes) {
-      const rotorZ = -0.028; // Disc brake mounted on non-drive side (left)
+      const rotorZ = -0.028;
       const rotorCenter = new THREE.Vector3(c.x, c.y, rotorZ);
-      addGearWheel(rotorCenter, 18, 0.080, 0.002, 0.038, wheelsBuf, 'z', 0.95);
+      addDiscBrakeRotor(rotorCenter, 0.080, wheelsBuf, 0.95);
 
-      // Disc Brake Caliper
       const caliperPos = w.isRear
         ? new THREE.Vector3(c.x + 0.045, c.y + 0.055, rotorZ - 0.005)
         : new THREE.Vector3(c.x - 0.045, c.y + 0.055, rotorZ - 0.005);
@@ -817,13 +1065,13 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   // ==========================================
   // 4. DRIVETRAIN ASSEMBLY
   // ==========================================
-  // Bottom Bracket Spindle & Outboard Sealed Cups
+  // Full-width Bottom Bracket Spindle connecting seamlessly into both crank arms
   addCylinder(
-    new THREE.Vector3(bbCenter.x, bbCenter.y, -0.050),
-    new THREE.Vector3(bbCenter.x, bbCenter.y, 0.050),
+    new THREE.Vector3(bbCenter.x, bbCenter.y, -0.075),
+    new THREE.Vector3(bbCenter.x, bbCenter.y, 0.075),
     0.012, 0.012, 14, drivetrainBuf, true, true, 0.92
   );
-  // Splined BB Cups
+  // Splined BB External Cups
   for (const side of [-1, 1]) {
     addCylinder(
       new THREE.Vector3(bbCenter.x, bbCenter.y, side * 0.034),
@@ -834,16 +1082,26 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
 
   // Dual 172.5mm Forged Aluminum Crank Arms
   const crankLen = 0.1725;
-  const crankAngle = -0.45; // Drive side crank pointing forward-down
+  const crankAngle = -0.45;
 
-  // Right Drive Crank
+  // Right Drive Crank (Spindle boss, forged beam, pedal eye)
   const rightCrankBase = new THREE.Vector3(bbCenter.x, bbCenter.y, 0.070);
   const rightCrankTip = new THREE.Vector3(
     bbCenter.x + Math.cos(crankAngle) * crankLen,
     bbCenter.y + Math.sin(crankAngle) * crankLen,
     0.075
   );
+  addCylinder(
+    new THREE.Vector3(bbCenter.x, bbCenter.y, 0.060),
+    new THREE.Vector3(bbCenter.x, bbCenter.y, 0.078),
+    0.020, 0.020, 14, drivetrainBuf, true, true, 0.94
+  );
   addCylinder(rightCrankBase, rightCrankTip, 0.018, 0.013, 12, drivetrainBuf, true, true, 0.95);
+  addCylinder(
+    new THREE.Vector3(rightCrankTip.x, rightCrankTip.y, 0.068),
+    new THREE.Vector3(rightCrankTip.x, rightCrankTip.y, 0.082),
+    0.015, 0.015, 12, drivetrainBuf, true, true, 0.92
+  );
 
   // Left Non-Drive Crank (180° opposite)
   const leftCrankAngle = crankAngle + Math.PI;
@@ -853,7 +1111,17 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     bbCenter.y + Math.sin(leftCrankAngle) * crankLen,
     -0.075
   );
+  addCylinder(
+    new THREE.Vector3(bbCenter.x, bbCenter.y, -0.078),
+    new THREE.Vector3(bbCenter.x, bbCenter.y, -0.060),
+    0.020, 0.020, 14, drivetrainBuf, true, true, 0.94
+  );
   addCylinder(leftCrankBase, leftCrankTip, 0.018, 0.013, 12, drivetrainBuf, true, true, 0.95);
+  addCylinder(
+    new THREE.Vector3(leftCrankTip.x, leftCrankTip.y, -0.082),
+    new THREE.Vector3(leftCrankTip.x, leftCrankTip.y, -0.068),
+    0.015, 0.015, 12, drivetrainBuf, true, true, 0.92
+  );
 
   // 4-Arm Chainring Spider on Right Crank
   for (let a = 0; a < 4; a++) {
@@ -864,95 +1132,90 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
       0.048
     );
     addCylinder(new THREE.Vector3(bbCenter.x, bbCenter.y, 0.052), spEnd, 0.010, 0.007, 8, drivetrainBuf, true, true, 0.92);
-    // Chainring bolt
     addCylinder(spEnd, new THREE.Vector3(spEnd.x, spEnd.y, 0.042), 0.005, 0.005, 8, drivetrainBuf, true, true, 0.85);
   }
 
-  // 2x Road Double Chainrings: Outer 50T and Inner 34T with gear teeth
-  // Outer 50T (pitch radius ~0.101m)
+  // Double Chainrings: Outer 50T and Inner 34T with cog teeth
   addGearWheel(new THREE.Vector3(bbCenter.x, bbCenter.y, 0.048), 50, 0.101, 0.003, 0.060, drivetrainBuf, 'z', 0.96);
-  // Inner 34T (pitch radius ~0.069m)
   addGearWheel(new THREE.Vector3(bbCenter.x, bbCenter.y, 0.041), 34, 0.069, 0.003, 0.040, drivetrainBuf, 'z', 0.92);
 
-  // 11-Speed Rear Cassette (11 cogs stacked from 11T to 28T on rear freehub)
-  const cassetteCogs = [11, 12, 13, 14, 15, 17, 19, 21, 23, 25, 28];
+  // 11-Speed Rear Cassette (Ordered largest 28T inboard to smallest 11T outboard)
+  const cassetteCogs = [28, 25, 23, 21, 19, 17, 15, 14, 13, 12, 11];
   const cogStartZ = 0.024;
   const cogSpacing = 0.0038;
 
   for (let c = 0; c < cassetteCogs.length; c++) {
     const toothNum = cassetteCogs[c];
-    const pitchR = (toothNum / 50) * 0.101; // Scaled to standard bicycle pitch
+    const pitchR = (toothNum / 50) * 0.101;
     const cogZ = cogStartZ + c * cogSpacing;
     addGearWheel(new THREE.Vector3(rearAxle.x, rearAxle.y, cogZ), toothNum, pitchR, 0.002, 0.018, drivetrainBuf, 'z', 0.95);
   }
-  // Cassette lockring
+
+  // Cassette lockring on outer end
+  const lockringZ = cogStartZ + cassetteCogs.length * cogSpacing;
   addCylinder(
-    new THREE.Vector3(rearAxle.x, rearAxle.y, cogStartZ + cassetteCogs.length * cogSpacing),
-    new THREE.Vector3(rearAxle.x, rearAxle.y, cogStartZ + cassetteCogs.length * cogSpacing + 0.003),
+    new THREE.Vector3(rearAxle.x, rearAxle.y, lockringZ),
+    new THREE.Vector3(rearAxle.x, rearAxle.y, lockringZ + 0.003),
     0.018, 0.018, 16, drivetrainBuf, true, true, 0.88
   );
 
-  // Rear Derailleur Assembly (B-knuckle, parallelogram, cage, 2x 11T jockey pulley wheels)
+  // Rear Derailleur Assembly (Derailleur body, cage, dual 11T jockey pulleys)
   const derailleurHanger = new THREE.Vector3(rearAxle.x + 0.008, rearAxle.y - 0.038, 0.068);
   const upperJockey = new THREE.Vector3(rearAxle.x + 0.025, rearAxle.y - 0.065, 0.045);
   const lowerJockey = new THREE.Vector3(rearAxle.x + 0.060, rearAxle.y - 0.125, 0.045);
 
-  // Derailleur body parallelogram links
   addCylinder(derailleurHanger, upperJockey, 0.009, 0.007, 10, drivetrainBuf, true, true, 0.30);
-  // Derailleur pulley cage plates
   addCylinder(upperJockey, lowerJockey, 0.008, 0.008, 8, drivetrainBuf, true, true, 0.25);
 
-  // 11T Upper Guide Pulley & 11T Lower Tension Pulley Wheels
   addGearWheel(upperJockey, 11, 0.022, 0.004, 0.006, drivetrainBuf, 'z', 0.20);
   addGearWheel(lowerJockey, 11, 0.022, 0.004, 0.006, drivetrainBuf, 'z', 0.20);
-  // Center pulley pivot bolts
   addCylinder(new THREE.Vector3(upperJockey.x, upperJockey.y, 0.038), new THREE.Vector3(upperJockey.x, upperJockey.y, 0.052), 0.004, 0.004, 8, drivetrainBuf, true, true, 0.98);
   addCylinder(new THREE.Vector3(lowerJockey.x, lowerJockey.y, 0.038), new THREE.Vector3(lowerJockey.x, lowerJockey.y, 0.052), 0.004, 0.004, 8, drivetrainBuf, true, true, 0.98);
 
-  // Continuous Roller Chain (Loops over front 50T, rear cog, upper pulley, lower pulley, and returns)
+  // Continuous Closed-Loop Roller Chain (Loops over front 50T, rear cog, pulleys, and returns)
   const chainPath: THREE.Vector3[] = [];
-  const selectedRearPitchR = (cassetteCogs[5] / 50) * 0.101; // In middle cog (~17T)
-  const chainZ = 0.046;
+  const middleCogPitchR = (cassetteCogs[5] / 50) * 0.101; // ~17T cog
+  const chainZ = 0.045;
 
-  // 1. Top chainstay run: from front chainring top to rear cog top
+  // 1. Top chain run: front chainring top to rear cog top
   const frontTop = new THREE.Vector3(bbCenter.x, bbCenter.y + 0.101, chainZ);
-  const rearTop = new THREE.Vector3(rearAxle.x, rearAxle.y + selectedRearPitchR, chainZ);
+  const rearTop = new THREE.Vector3(rearAxle.x, rearAxle.y + middleCogPitchR, chainZ);
   const numTopSteps = 16;
-  for (let i = 0; i <= numTopSteps; i++) {
+  for (let i = 0; i < numTopSteps; i++) {
     chainPath.push(new THREE.Vector3().lerpVectors(frontTop, rearTop, i / numTopSteps));
   }
 
-  // 2. Wrap around rear cassette cog
+  // 2. Wrap around rear cog
   const numRearWrap = 8;
-  for (let i = 1; i <= numRearWrap; i++) {
+  for (let i = 0; i < numRearWrap; i++) {
     const angle = Math.PI * 0.5 + (i / numRearWrap) * Math.PI * 0.6;
     chainPath.push(new THREE.Vector3(
-      rearAxle.x + Math.cos(angle) * selectedRearPitchR,
-      rearAxle.y + Math.sin(angle) * selectedRearPitchR,
+      rearAxle.x + Math.cos(angle) * middleCogPitchR,
+      rearAxle.y + Math.sin(angle) * middleCogPitchR,
       chainZ
     ));
   }
 
-  // 3. Curve into upper guide jockey pulley
+  // 3. Curve into upper jockey pulley
   chainPath.push(new THREE.Vector3(upperJockey.x + 0.015, upperJockey.y + 0.018, chainZ));
   chainPath.push(new THREE.Vector3(upperJockey.x - 0.015, upperJockey.y, chainZ));
 
-  // 4. Snake down to lower tension pulley
+  // 4. Snake through lower tension pulley
   chainPath.push(new THREE.Vector3(lowerJockey.x - 0.015, lowerJockey.y, chainZ));
   chainPath.push(new THREE.Vector3(lowerJockey.x, lowerJockey.y - 0.022, chainZ));
   chainPath.push(new THREE.Vector3(lowerJockey.x + 0.018, lowerJockey.y - 0.018, chainZ));
 
-  // 5. Bottom chainstay return run: to bottom of front chainring
+  // 5. Bottom chain run: lower pulley back to bottom of front chainring
   const frontBottom = new THREE.Vector3(bbCenter.x, bbCenter.y - 0.101, chainZ);
   const numBottomSteps = 16;
   const lastDerailleurPt = chainPath[chainPath.length - 1];
-  for (let i = 1; i <= numBottomSteps; i++) {
+  for (let i = 1; i < numBottomSteps; i++) {
     chainPath.push(new THREE.Vector3().lerpVectors(lastDerailleurPt, frontBottom, i / numBottomSteps));
   }
 
-  // 6. Wrap around front chainring back to top
+  // 6. Wrap around front chainring back to top (seamlessly closing the loop)
   const numFrontWrap = 12;
-  for (let i = 1; i < numFrontWrap; i++) {
+  for (let i = 0; i < numFrontWrap; i++) {
     const angle = -Math.PI * 0.5 + (i / numFrontWrap) * Math.PI;
     chainPath.push(new THREE.Vector3(
       bbCenter.x + Math.cos(angle) * 0.101,
@@ -961,25 +1224,36 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     ));
   }
 
-  // Synthesize realistic alternating roller chain links along the loop
-  for (let i = 0; i < chainPath.length - 1; i++) {
+  // Synthesize closed continuous roller chain links with side plates and roller pins
+  const totalChainNodes = chainPath.length;
+  for (let i = 0; i < totalChainNodes; i++) {
     const ptA = chainPath[i];
-    const ptB = chainPath[i + 1];
+    const ptB = chainPath[(i + 1) % totalChainNodes];
     const isOuter = i % 2 === 0;
-    const linkRadius = isOuter ? 0.0055 : 0.0048;
     const linkLen = ptA.distanceTo(ptB);
+
     if (linkLen > 0.001) {
-      addCylinder(ptA, ptB, linkRadius, linkRadius, 6, drivetrainBuf, true, true, isOuter ? 0.98 : 0.85);
-      // Roller pin rivet
+      // Central roller sleeve
+      addCylinder(ptA, ptB, 0.0042, 0.0042, 6, drivetrainBuf, true, true, 0.88);
+
+      // Outer or inner parallel side link plates
+      const plateZOffset = isOuter ? 0.0035 : 0.0024;
+      for (const pSign of [-1, 1]) {
+        const plateA = new THREE.Vector3(ptA.x, ptA.y, chainZ + pSign * plateZOffset);
+        const plateB = new THREE.Vector3(ptB.x, ptB.y, chainZ + pSign * plateZOffset);
+        addCylinder(plateA, plateB, 0.0048, 0.0048, 6, drivetrainBuf, true, true, isOuter ? 0.98 : 0.85);
+      }
+
+      // Roller pin rivet through center
       addCylinder(
-        new THREE.Vector3(ptA.x, ptA.y, chainZ - 0.004),
-        new THREE.Vector3(ptA.x, ptA.y, chainZ + 0.004),
-        0.0022, 0.0022, 6, drivetrainBuf, true, true, 0.92
+        new THREE.Vector3(ptA.x, ptA.y, chainZ - 0.0045),
+        new THREE.Vector3(ptA.x, ptA.y, chainZ + 0.0045),
+        0.0022, 0.0022, 6, drivetrainBuf, true, true, 0.95
       );
     }
   }
 
-  // Pedals (Dual platform/road clip pedals with axles and grip body)
+  // Pedals (Supports both 'platform' and 'clipless' styles)
   const pedals = [
     { tip: rightCrankTip, sign: 1 },
     { tip: leftCrankTip, sign: -1 },
@@ -991,15 +1265,38 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     // 9/16" Pedal spindle
     addCylinder(axleStart, axleEnd, 0.006, 0.006, 10, drivetrainBuf, true, true, 0.95);
 
-    // Pedal cage / body
     const bodyCenter = new THREE.Vector3().lerpVectors(axleStart, axleEnd, 0.65);
-    addBox(bodyCenter, new THREE.Vector3(0.082, 0.016, 0.065), new THREE.Euler(0, 0, 0), drivetrainBuf, 0.35);
 
-    // Amber Pedal Reflectors (Front & rear of each pedal body)
-    if (includeReflectors) {
-      for (const fwd of [-1, 1]) {
-        const refPos = new THREE.Vector3(bodyCenter.x + fwd * 0.043, bodyCenter.y, bodyCenter.z);
-        addBox(refPos, new THREE.Vector3(0.006, 0.012, 0.042), new THREE.Euler(0, 0, 0), accessoriesBuf, 0.98);
+    if (pedalStyle === 'clipless') {
+      // Road Racing Clipless Pedal (Look Keo / Shimano SPD-SL style compact body)
+      addBox(bodyCenter, new THREE.Vector3(0.065, 0.015, 0.048), new THREE.Euler(0, 0, 0), drivetrainBuf, 0.25);
+      // Stainless steel cleat wear plate
+      addBox(
+        new THREE.Vector3(bodyCenter.x, bodyCenter.y + 0.008, bodyCenter.z),
+        new THREE.Vector3(0.040, 0.002, 0.036),
+        new THREE.Euler(0, 0, 0),
+        drivetrainBuf,
+        0.95
+      );
+      // Spring-loaded retention binding claw at rear
+      const clawPos = new THREE.Vector3(bodyCenter.x - 0.028, bodyCenter.y + 0.010, bodyCenter.z);
+      addBox(clawPos, new THREE.Vector3(0.014, 0.018, 0.040), new THREE.Euler(0, 0, 0.2), drivetrainBuf, 0.40);
+      // Tension adjustment screw
+      addCylinder(
+        new THREE.Vector3(clawPos.x - 0.006, clawPos.y, clawPos.z),
+        new THREE.Vector3(clawPos.x - 0.012, clawPos.y, clawPos.z),
+        0.003, 0.003, 8, drivetrainBuf, true, true, 0.98
+      );
+    } else {
+      // Platform Pedal with perimeter traction pins
+      addBox(bodyCenter, new THREE.Vector3(0.082, 0.016, 0.065), new THREE.Euler(0, 0, 0), drivetrainBuf, 0.35);
+
+      // Amber Pedal Reflectors
+      if (includeReflectors) {
+        for (const fwd of [-1, 1]) {
+          const refPos = new THREE.Vector3(bodyCenter.x + fwd * 0.043, bodyCenter.y, bodyCenter.z);
+          addBox(refPos, new THREE.Vector3(0.006, 0.012, 0.042), new THREE.Euler(0, 0, 0), accessoriesBuf, 0.98);
+        }
       }
     }
   }
@@ -1007,7 +1304,6 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   // ==========================================
   // 5. COCKPIT SEATING & SADDLE ASSEMBLY
   // ==========================================
-  // Seatpost (inserted into seat tube, extending to saddle clamp at ~0.86m height)
   const saddleClampPos = new THREE.Vector3(seatCluster.x - 0.035, seatCluster.y + 0.125, 0.0);
   addCylinder(seatCluster, saddleClampPos, 0.0135, 0.0135, 14, saddleBuf, true, true, 0.88);
 
@@ -1017,7 +1313,6 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     new THREE.Vector3(seatCluster.x - 0.004, seatCluster.y + 0.025, 0),
     0.017, 0.017, 14, saddleBuf, true, true, 0.95
   );
-  // Hex bolt on collar
   addCylinder(
     new THREE.Vector3(seatCluster.x - 0.018, seatCluster.y + 0.015, -0.010),
     new THREE.Vector3(seatCluster.x - 0.018, seatCluster.y + 0.015, 0.010),
@@ -1036,37 +1331,76 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     addSweptTube([rStart, rMid, rEnd], () => 0.0035, 8, saddleBuf, true, true, 0.98);
   }
 
-  // Aerodynamic Road Racing Saddle Shell & Cushion
-  // Modeled with anatomical perineal pressure-relief cutout and flared rear wings
-  const saddleSteps = 12;
-  const saddleBaseX = saddleClampPos.x - 0.120;
+  // Aerodynamic Road Racing Saddle: Solid Contoured Shell with Perineal Relief Channel
   const saddleLen = 0.265;
-  const saddlePath: THREE.Vector3[] = [];
+  const saddleBaseX = saddleClampPos.x - 0.120;
+  const saddleStations = 14;
+  const crossPtsPerStation = 7; // Left skirt, left wing, left relief, center groove, right relief, right wing, right skirt
+  const saddleStartV = saddleBuf.positions.length / 3;
 
-  for (let i = 0; i <= saddleSteps; i++) {
-    const f = i / saddleSteps;
-    const sx = saddleBaseX + f * saddleLen;
-    // Ergonomic dipped profile (nose slightly down, center dipped, rear flared)
-    const sy = saddleClampPos.y + 0.035 + (f < 0.3 ? (0.3 - f) * 0.025 : Math.pow(f - 0.3, 1.8) * 0.030);
-    saddlePath.push(new THREE.Vector3(sx, sy, 0));
+  for (let i = 0; i <= saddleStations; i++) {
+    const f = i / saddleStations; // 0 = rear cantle, 1 = front nose
+    const sx = saddleBaseX + (1.0 - f) * saddleLen;
+    const sy = saddleClampPos.y + 0.035 + (f > 0.7 ? (f - 0.7) * 0.020 : Math.pow(0.7 - f, 1.8) * 0.032);
+
+    // Width flares at rear sit-bones (f=0) and narrows at nose (f=1)
+    const halfW = f > 0.6 ? 0.014 + (1.0 - f) * 0.025 : 0.024 + Math.pow(0.6 - f, 1.3) * 0.095;
+
+    // 7 cross-section coordinates across saddle width
+    const offsets = [
+      { yOff: -0.014, zOff: -halfW },             // Left lower skirt
+      { yOff: -0.001, zOff: -halfW * 0.82 },      // Left upper sit wing
+      { yOff: -0.003, zOff: -halfW * 0.28 },      // Left relief channel edge
+      { yOff: -0.010, zOff: 0.0 },                // Center perineal relief groove
+      { yOff: -0.003, zOff: halfW * 0.28 },       // Right relief channel edge
+      { yOff: -0.001, zOff: halfW * 0.82 },       // Right upper sit wing
+      { yOff: -0.014, zOff: halfW },              // Right lower skirt
+    ];
+
+    for (let c = 0; c < crossPtsPerStation; c++) {
+      const off = offsets[c];
+      const px = sx;
+      const py = sy + off.yOff;
+      const pz = off.zOff;
+
+      // Surface normal
+      let nx = f > 0.8 ? 0.3 : (f < 0.2 ? -0.3 : 0);
+      let ny = 1.0;
+      let nz = off.zOff / Math.max(0.001, halfW);
+      const nlen = Math.hypot(nx, ny, nz);
+      nx /= nlen; ny /= nlen; nz /= nlen;
+
+      saddleBuf.positions.push(px, py, pz);
+      saddleBuf.normals.push(nx, ny, nz);
+      saddleBuf.uvs.push(c / (crossPtsPerStation - 1), f * 4);
+      if (saddleBuf.colors) saddleBuf.colors.push(0.20, 0.20, 0.20);
+    }
   }
 
-  // Sweep saddle top shell with variable width (narrow nose 0.020m -> flared rear 0.075m)
-  for (let i = 0; i < saddleSteps; i++) {
-    const f = i / saddleSteps;
-    const fNext = (i + 1) / saddleSteps;
-    const p1 = saddlePath[i];
-    const p2 = saddlePath[i + 1];
+  // Triangulate saddle top shell surface
+  for (let i = 0; i < saddleStations; i++) {
+    for (let c = 0; c < crossPtsPerStation - 1; c++) {
+      const a = saddleStartV + i * crossPtsPerStation + c;
+      const b = saddleStartV + (i + 1) * crossPtsPerStation + c;
+      const d = saddleStartV + i * crossPtsPerStation + (c + 1);
+      const e = saddleStartV + (i + 1) * crossPtsPerStation + (c + 1);
 
-    const w1 = f < 0.4 ? 0.016 + f * 0.020 : 0.024 + Math.pow(f - 0.4, 1.4) * 0.085;
-    const w2 = fNext < 0.4 ? 0.016 + fNext * 0.020 : 0.024 + Math.pow(fNext - 0.4, 1.4) * 0.085;
-
-    // Left and right saddle wings
-    for (const side of [-1, 1]) {
-      const sp1 = new THREE.Vector3(p1.x, p1.y, side * w1);
-      const sp2 = new THREE.Vector3(p2.x, p2.y, side * w2);
-      addCylinder(sp1, sp2, 0.008, 0.008, 8, saddleBuf, true, true, 0.20);
+      saddleBuf.indices.push(a, b, d);
+      saddleBuf.indices.push(b, e, d);
     }
+  }
+
+  // Rounded front nose cap
+  const nosePt = new THREE.Vector3(saddleBaseX, saddleClampPos.y + 0.038, 0);
+  const noseStartRing = saddleStartV + saddleStations * crossPtsPerStation;
+  const noseCenterV = saddleBuf.positions.length / 3;
+  saddleBuf.positions.push(nosePt.x - 0.008, nosePt.y - 0.004, nosePt.z);
+  saddleBuf.normals.push(-1, 0, 0);
+  saddleBuf.uvs.push(0.5, 0.5);
+  if (saddleBuf.colors) saddleBuf.colors.push(0.20, 0.20, 0.20);
+
+  for (let c = 0; c < crossPtsPerStation - 1; c++) {
+    saddleBuf.indices.push(noseCenterV, noseStartRing + c, noseStartRing + c + 1);
   }
 
   // ==========================================
@@ -1076,22 +1410,22 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
     const cableRad = 0.0022;
 
     // Front Brake Cable: from left handlebar lever to front disc caliper
-    const fb0 = new THREE.Vector3(handlebarCenter.x + 0.045, handlebarCenter.y + 0.025, -barWidth * 0.5);
-    const fb1 = new THREE.Vector3(headTubeTop.x + 0.060, headTubeTop.y - 0.030, -0.045);
+    const fb0 = leftLeverPos;
+    const fb1 = new THREE.Vector3(headTubeTop.x + 0.050, headTubeTop.y - 0.020, -0.045);
     const fb2 = new THREE.Vector3(forkCrown.x + 0.015, forkCrown.y - 0.060, -0.035);
     const fb3 = new THREE.Vector3(frontAxle.x - 0.040, frontAxle.y + 0.065, -0.032);
     addSweptTube([fb0, fb1, fb2, fb3], () => cableRad, 8, accessoriesBuf, true, true, 0.12);
 
-    // Rear Brake Cable: from right handlebar lever, through top tube to rear caliper
-    const rb0 = new THREE.Vector3(handlebarCenter.x + 0.045, handlebarCenter.y + 0.025, barWidth * 0.5);
+    // Rear Brake Cable: from right handlebar lever through top tube to rear caliper
+    const rb0 = rightLeverPos;
     const rb1 = new THREE.Vector3(headTubeTop.x + 0.050, headTubeTop.y - 0.020, 0.045);
     const rb2 = new THREE.Vector3(seatCluster.x + 0.040, seatCluster.y + 0.005, 0.020);
     const rb3 = new THREE.Vector3(seatCluster.x - 0.030, seatCluster.y - 0.040, -0.025);
     const rb4 = new THREE.Vector3(rearAxle.x + 0.050, rearAxle.y + 0.065, -0.032);
     addSweptTube([rb0, rb1, rb2, rb3, rb4], () => cableRad, 8, accessoriesBuf, true, true, 0.12);
 
-    // Rear Shifter Cable: from right handlebar down along down tube to rear derailleur
-    const rs0 = new THREE.Vector3(handlebarCenter.x + 0.035, handlebarCenter.y + 0.015, barWidth * 0.45);
+    // Rear Shifter Cable: from right handlebar along down tube to rear derailleur
+    const rs0 = new THREE.Vector3(rightLeverPos.x - 0.015, rightLeverPos.y - 0.010, rightLeverPos.z * 0.90);
     const rs1 = new THREE.Vector3(headTubeBottom.x + 0.020, headTubeBottom.y + 0.040, 0.035);
     const rs2 = new THREE.Vector3(bbCenter.x + 0.040, bbCenter.y - 0.015, 0.032);
     const rs3 = new THREE.Vector3(rearAxle.x + 0.035, rearAxle.y - 0.035, 0.065);
@@ -1130,7 +1464,7 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   };
 
   const wheelsMat: MaterialProperties = {
-    color: '#1a1d20',
+    color: '#ffffff', // Set to white so DataTexture colors (tan sidewalls & black tread) show purely
     roughness: 0.82,
     metalness: 0.08,
     emissive: '#000000',
@@ -1172,7 +1506,7 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
   };
 
   const accessoriesMat: MaterialProperties = {
-    color: '#f59e0b', // Amber safety reflector & black cable housing
+    color: '#f59e0b',
     roughness: 0.25,
     metalness: 0.20,
     emissive: '#000000',
@@ -1210,7 +1544,7 @@ export function generateRealisticBicycle(options: BicycleOptions = {}): BicycleR
 
   const forkCockpitItem: SceneItem = {
     id: 'bicycle_fork_cockpit',
-    name: 'Bicycle - Fork, Stem & Drop Handlebars',
+    name: handlebarStyle === 'flat' ? 'Bicycle - Fork, Stem & Flat Handlebars' : 'Bicycle - Fork, Stem & Drop Handlebars',
     type: 'mesh',
     primitiveType: 'custom',
     transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },

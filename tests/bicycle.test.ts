@@ -120,4 +120,93 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
     expect(glb).toBeInstanceOf(ArrayBuffer);
     expect((glb as ArrayBuffer).byteLength).toBeGreaterThan(50000);
   });
+
+  it('supports handlebarStyle options ("drop" and "flat") with distinct cockpit geometries', () => {
+    const dropBike = generateRealisticBicycle({ handlebarStyle: 'drop' });
+    expect(dropBike.forkAndCockpitItem.name).toContain('Drop Handlebars');
+
+    const flatBike = generateRealisticBicycle({ handlebarStyle: 'flat' });
+    expect(flatBike.forkAndCockpitItem.name).toContain('Flat Handlebars');
+    expect(flatBike.stats.forkCockpitVertices).toBeGreaterThan(0);
+    expect(flatBike.stats.forkCockpitTriangles).toBeGreaterThan(0);
+
+    // Verify flat handlebar is wider (~0.66m) than drop handlebar (~0.42m)
+    const flatGeo = createPrimitiveGeometry('custom', flatBike.forkAndCockpitItem.geometryParams);
+    flatGeo.computeBoundingBox();
+    const flatWidth = (flatGeo.boundingBox!.max.z - flatGeo.boundingBox!.min.z);
+    expect(flatWidth).toBeGreaterThan(0.60);
+  });
+
+  it('supports pedalStyle options ("platform" and "clipless")', () => {
+    const platformBike = generateRealisticBicycle({ pedalStyle: 'platform', includeReflectors: true });
+    expect(platformBike.stats.accessoriesTriangles).toBeGreaterThan(0);
+
+    const cliplessBike = generateRealisticBicycle({ pedalStyle: 'clipless', includeReflectors: false });
+    expect(cliplessBike.stats.drivetrainTriangles).toBeGreaterThan(0);
+  });
+
+  it('proportions wheel and frame geometry to custom wheelSize', () => {
+    const smallWheelBike = generateRealisticBicycle({ wheelSize: 0.28 });
+    const standardBike = generateRealisticBicycle({ wheelSize: 0.34 });
+
+    const smallGroup = new THREE.Group();
+    for (const item of smallWheelBike.allItems) {
+      smallGroup.add(new THREE.Mesh(createPrimitiveGeometry('custom', item.geometryParams)));
+    }
+    const smallBbox = new THREE.Box3().setFromObject(smallGroup);
+
+    const stdGroup = new THREE.Group();
+    for (const item of standardBike.allItems) {
+      stdGroup.add(new THREE.Mesh(createPrimitiveGeometry('custom', item.geometryParams)));
+    }
+    const stdBbox = new THREE.Box3().setFromObject(stdGroup);
+
+    // Both touch ground near y=0
+    expect(smallBbox.min.y).toBeCloseTo(0.0, 1);
+    expect(stdBbox.min.y).toBeCloseTo(0.0, 1);
+    // Smaller wheel bike has lower top height
+    expect(smallBbox.max.y).toBeLessThan(stdBbox.max.y);
+  });
+
+  it('sanitizes spoke counts safely for zero, odd, and extreme values', () => {
+    const zeroSpokes = generateRealisticBicycle({ spokeCount: 0 });
+    expect(zeroSpokes.stats.wheelsTriangles).toBeGreaterThan(0);
+
+    const oddSpokes = generateRealisticBicycle({ spokeCount: 27 });
+    expect(oddSpokes.stats.wheelsTriangles).toBeGreaterThan(0);
+
+    const highSpokes = generateRealisticBicycle({ spokeCount: 64 });
+    expect(highSpokes.stats.wheelsTriangles).toBeGreaterThan(zeroSpokes.stats.wheelsTriangles);
+  });
+
+  it('guarantees zero NaNs and valid vertex indexing across all procedural sub-assemblies', () => {
+    const bike = generateRealisticBicycle();
+
+    for (const item of bike.allItems) {
+      const custom = item.geometryParams?.customGeometry;
+      expect(custom).toBeDefined();
+      if (!custom) continue;
+
+      const numVerts = custom.positions.length / 3;
+      expect(numVerts).toBeGreaterThan(0);
+
+      // Verify no NaN or infinite values
+      for (let i = 0; i < custom.positions.length; i++) {
+        expect(Number.isFinite(custom.positions[i])).toBe(true);
+      }
+      for (let i = 0; i < custom.normals.length; i++) {
+        expect(Number.isFinite(custom.normals[i])).toBe(true);
+      }
+      for (let i = 0; i < custom.uvs.length; i++) {
+        expect(Number.isFinite(custom.uvs[i])).toBe(true);
+      }
+
+      // Verify all indices are valid vertex pointers
+      for (let i = 0; i < custom.indices.length; i++) {
+        const idx = custom.indices[i];
+        expect(idx).toBeGreaterThanOrEqual(0);
+        expect(idx).toBeLessThan(numVerts);
+      }
+    }
+  });
 });

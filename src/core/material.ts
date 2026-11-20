@@ -304,7 +304,8 @@ function createCarbonFiberTexture(): THREE.DataTexture {
 
 /**
  * Creates realistic vulcanized rubber bicycle tire tread DataTexture (512x512).
- * Features smooth rolling center strip, directional herringbone sipes, and bead groove.
+ * Features smooth rolling center strip, directional herringbone sipes,
+ * authentic competition tan/gum-wall sidewalls, and bead groove.
  */
 function createTireTreadTexture(): THREE.DataTexture {
   const width = 512;
@@ -319,40 +320,57 @@ function createTireTreadTexture(): THREE.DataTexture {
 
       const distFromCenter = Math.abs(u - 0.5);
 
-      let baseTone = 38;
-      let isGroove = false;
+      let r = 36;
+      let g = 36;
+      let b = 36;
 
       if (distFromCenter < 0.12) {
-        const micro = Math.sin(x * 0.8) * Math.cos(y * 0.8) * 3;
-        baseTone += micro;
-      } else if (distFromCenter < 0.38) {
-        const sipeFrequency = 24.0;
-        const sipeAngle = (u > 0.5 ? 1 : -1) * (distFromCenter - 0.12) * 6.0;
+        // Center rolling slick band with subtle rubber grain
+        const micro = Math.sin(x * 1.2) * Math.cos(y * 1.2) * 3;
+        r = 34 + micro;
+        g = 34 + micro;
+        b = 35 + micro;
+      } else if (distFromCenter < 0.32) {
+        // Shoulder grip zone with directional herringbone chevron sipes
+        const sipeFrequency = 16.0;
+        const sipeAngle = (u > 0.5 ? 1 : -1) * (distFromCenter - 0.12) * 8.0;
         const sipePhase = Math.sin((v * sipeFrequency + sipeAngle) * Math.PI * 2);
 
-        if (sipePhase > 0.72) {
-          isGroove = true;
+        if (sipePhase > 0.68) {
+          // Deep sipe drainage groove
+          r = 15;
+          g = 15;
+          b = 16;
         } else {
-          const pebble = Math.sin(x * 0.9) * Math.cos(y * 0.9);
-          baseTone += pebble * 6;
+          // Textured grip knurling
+          const knurl = Math.sin(x * 1.5) * Math.cos(y * 1.5) * 4;
+          r = 40 + knurl;
+          g = 40 + knurl;
+          b = 42 + knurl;
+        }
+      } else if (distFromCenter < 0.46) {
+        // High-end competition tan/gum-wall sidewall with fine structural ribbing
+        const ribbing = Math.sin(v * 64.0 * Math.PI * 2) * 5;
+        r = 115 + ribbing;
+        g = 86 + ribbing * 0.8;
+        b = 58 + ribbing * 0.6;
+
+        // Subtle brand label patch on one quadrant of the sidewall
+        if (Math.abs(v - 0.25) < 0.04 && distFromCenter > 0.35 && distFromCenter < 0.43) {
+          r = 220;
+          g = 210;
+          b = 195;
         }
       } else {
-        const isBeadLine = Math.abs(distFromCenter - 0.46) < 0.015;
-        if (isBeadLine) {
-          baseTone = 20;
-        } else {
-          baseTone = 32;
-        }
+        // Inner rim bead channel
+        r = 22;
+        g = 22;
+        b = 24;
       }
 
-      if (isGroove) {
-        baseTone = 14;
-      }
-
-      const val = Math.max(10, Math.min(255, Math.floor(baseTone)));
-      data[idx] = val;
-      data[idx + 1] = val;
-      data[idx + 2] = val;
+      data[idx] = Math.max(0, Math.min(255, Math.floor(r)));
+      data[idx + 1] = Math.max(0, Math.min(255, Math.floor(g)));
+      data[idx + 2] = Math.max(0, Math.min(255, Math.floor(b)));
       data[idx + 3] = 255;
     }
   }

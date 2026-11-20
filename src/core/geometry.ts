@@ -472,9 +472,21 @@ export function createSweptTubeGeometry(options: SweptTubeOptions): THREE.Buffer
       const angle = Math.acos(dot);
       curN.applyAxisAngle(axis, angle);
     }
-    curN.sub(new THREE.Vector3().copy(curT).multiplyScalar(curN.dot(curT))).normalize();
+    const proj = curN.sub(new THREE.Vector3().copy(curT).multiplyScalar(curN.dot(curT)));
+    if (proj.lengthSq() > 0.0001) {
+      curN.copy(proj.normalize());
+    } else {
+      curN.copy(prevN);
+    }
     normals.push(curN);
-    binormals.push(new THREE.Vector3().crossVectors(curT, curN).normalize());
+
+    const binorm = new THREE.Vector3().crossVectors(curT, curN);
+    if (binorm.lengthSq() > 0.0001) {
+      binorm.normalize();
+    } else {
+      binorm.copy(binormals[i - 1]);
+    }
+    binormals.push(binorm);
   }
 
   const positions: number[] = [];
