@@ -23,7 +23,7 @@ describe('PolyForge Model Context Protocol (MCP) Server', () => {
     expect(res.result.capabilities.tools).toBeDefined();
   });
 
-  it('lists all 12 available PolyForge 3D modeling tools with schemas', async () => {
+  it('lists all 13 available PolyForge 3D modeling tools with schemas', async () => {
     const res = await server.handleRequest({
       jsonrpc: '2.0',
       id: 2,
@@ -31,11 +31,12 @@ describe('PolyForge Model Context Protocol (MCP) Server', () => {
       params: {},
     });
 
-    expect(res.result.tools.length).toBe(12);
+    expect(res.result.tools.length).toBe(13);
     const toolNames = res.result.tools.map((t: any) => t.name);
     expect(toolNames).toContain('polyforge_list_templates');
     expect(toolNames).toContain('polyforge_generate_template');
     expect(toolNames).toContain('polyforge_generate_bicycle');
+    expect(toolNames).toContain('polyforge_generate_human');
     expect(toolNames).toContain('polyforge_execute_script');
     expect(toolNames).toContain('polyforge_create_object');
     expect(toolNames).toContain('polyforge_update_object');
@@ -251,5 +252,29 @@ describe('PolyForge Model Context Protocol (MCP) Server', () => {
     expect(data.totalFrames).toBe(360);
     expect(server.state.items.length).toBe(7);
     expect(server.state.tracks.length).toBe(7);
+  });
+
+  it('generates realistic anatomical human with clothing and accessories via MCP tool call', async () => {
+    const res = await server.handleRequest({
+      jsonrpc: '2.0',
+      id: 104,
+      method: 'tools/call',
+      params: {
+        name: 'polyforge_generate_human',
+        arguments: {
+          includeClothing: true,
+          includeAccessories: true,
+          shirtColor: '#2563eb',
+          pantsColor: '#1e3a8a',
+        },
+      },
+    });
+
+    expect(res.result.isError).toBe(false);
+    const data = JSON.parse(res.result.content[0].text);
+    expect(data.message).toContain('realistic anatomical human model');
+    expect(data.stats.totalVertices).toBeGreaterThan(6000);
+    expect(data.components.length).toBe(5);
+    expect(server.state.items.length).toBe(5);
   });
 });

@@ -36,7 +36,7 @@ export const Viewport: React.FC<ViewportProps> = ({
   }, [containerRef]);
 
   return (
-    <div className="flex-1 relative bg-studio-950 overflow-hidden select-none">
+    <div className="flex-1 relative bg-white overflow-hidden select-none">
       {/* 3D WebGL Canvas Holder */}
       <div ref={canvasHolderRef} className="w-full h-full" />
 

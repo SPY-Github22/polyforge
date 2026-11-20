@@ -36,6 +36,7 @@ export class Engine {
   // Environment objects
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
+  private shadowPlane: THREE.Mesh;
   private dirLight: THREE.DirectionalLight;
   private hemiLight: THREE.HemisphereLight;
   private studioRimLight: THREE.DirectionalLight;
@@ -65,7 +66,7 @@ export class Engine {
 
     // 1. Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#0d1117');
+    this.scene.background = new THREE.Color('#ffffff');
     this.userMeshGroup = new THREE.Group();
     this.scene.add(this.userMeshGroup);
 
@@ -131,12 +132,21 @@ export class Engine {
       }
     });
 
-    // 6. Helpers
-    this.gridHelper = new THREE.GridHelper(20, 20, 0x388bfd, 0x30363d);
+    // 6. Helpers & Contact Shadow Receiver
+    this.gridHelper = new THREE.GridHelper(20, 20, 0x2563eb, 0xd0d7de);
     (this.gridHelper.material as THREE.Material).transparent = true;
-    (this.gridHelper.material as THREE.Material).opacity = 0.6;
-    this.gridHelper.position.y = -0.001;
+    (this.gridHelper.material as THREE.Material).opacity = 0.65;
+    this.gridHelper.position.y = -0.0005;
     this.scene.add(this.gridHelper);
+
+    // Dedicated ground shadow receiver plane for natural contact shadows on white studio floor
+    const shadowGeo = new THREE.PlaneGeometry(60, 60);
+    const shadowMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+    this.shadowPlane = new THREE.Mesh(shadowGeo, shadowMat);
+    this.shadowPlane.rotation.x = -Math.PI / 2;
+    this.shadowPlane.position.y = -0.001;
+    this.shadowPlane.receiveShadow = true;
+    this.scene.add(this.shadowPlane);
 
     this.axesHelper = new THREE.AxesHelper(3);
     (this.axesHelper.material as THREE.Material).depthTest = false;
@@ -159,7 +169,8 @@ export class Engine {
     this.dirLight.shadow.camera.right = 8;
     this.dirLight.shadow.camera.top = 8;
     this.dirLight.shadow.camera.bottom = -8;
-    this.dirLight.shadow.bias = -0.0005;
+    this.dirLight.shadow.bias = -0.0003;
+    this.dirLight.shadow.normalBias = 0.02;
     this.scene.add(this.dirLight);
 
     this.studioRimLight = new THREE.DirectionalLight(0x60a5fa, 0.45);
@@ -362,6 +373,7 @@ export class Engine {
     }
     this.dirLight.intensity = settings.directionalIntensity;
     this.dirLight.castShadow = settings.shadows;
+    this.shadowPlane.visible = settings.shadows;
     this.gridHelper.visible = settings.showGrid;
     this.axesHelper.visible = settings.showAxes;
 
@@ -566,6 +578,14 @@ export class Engine {
     this.scene.remove(this.ambientBounceLight.target);
     this.scene.remove(this.ambientBounceLight);
     this.ambientBounceLight.dispose();
+
+    this.scene.remove(this.shadowPlane);
+    this.shadowPlane.geometry.dispose();
+    if (Array.isArray(this.shadowPlane.material)) {
+      this.shadowPlane.material.forEach((m) => m.dispose());
+    } else {
+      this.shadowPlane.material.dispose();
+    }
 
     this.transformControls.dispose();
     this.orbitControls.dispose();

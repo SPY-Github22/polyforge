@@ -12,6 +12,7 @@ import {
 import { BotanicalTreeOptions } from '../botany';
 import { BicycleOptions } from '../bicycle';
 import { ClosedCircuitOptions } from '../animation';
+import { RealisticHumanOptions } from '../character';
 
 export type ProceduralTemplateId =
   | 'sci-fi-citadel'
@@ -66,6 +67,7 @@ export interface PolyForgeScriptAPI {
   createTree: (options?: BotanicalTreeOptions) => SceneItem[];
   createBicycle: (options?: BicycleOptions) => SceneItem[];
   createAnimatedBicycle: (options?: BicycleOptions & ClosedCircuitOptions) => { items: SceneItem[]; tracks: AnimationTrack[] };
+  createHuman: (options?: RealisticHumanOptions) => SceneItem[];
   createCustomMesh: (options: {
     name?: string;
     positions: number[];
@@ -149,7 +151,7 @@ export interface ProceduralGenerationResult {
 export interface ProceduralTemplate {
   id: ProceduralTemplateId;
   name: string;
-  category: 'Sci-Fi' | 'Astronomy' | 'Architecture' | 'Robotics' | 'Nature' | 'Kinetics' | 'Mechanical';
+  category: 'Sci-Fi' | 'Astronomy' | 'Architecture' | 'Robotics' | 'Nature' | 'Kinetics' | 'Mechanical' | 'Character';
   description: string;
   tags: string[];
   generate: (params?: Record<string, any>) => ProceduralGenerationResult;

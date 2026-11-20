@@ -19,6 +19,7 @@ import { insertOrUpdateKeyframe, ClosedCircuitOptions } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
 import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
 import { BicycleOptions, generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../bicycle';
+import { RealisticHumanOptions, generateRealisticHumanScene } from '../character';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -131,6 +132,16 @@ export function createPolyForgeScriptAPI(
       }
       logs.push(`[Mechanical] Generated animated bicycle circuit: ${circuit.items.length} sub-assemblies, ${circuit.tracks.length} tracks, ${circuit.totalFrames} frames.`);
       return { items: circuit.items, tracks: circuit.tracks };
+    },
+
+    createHuman: (options?: RealisticHumanOptions): SceneItem[] => {
+      const result = generateRealisticHumanScene(options);
+      for (const item of result.allItems) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      logs.push(`[Anatomy] Generated realistic human: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris across ${result.allItems.length} sub-assemblies.`);
+      return result.allItems;
     },
 
     createCustomMesh: (options: {

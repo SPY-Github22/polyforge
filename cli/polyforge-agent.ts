@@ -9,9 +9,10 @@ import { PolyForgeMCPServer } from './polyforge-mcp';
 import { EnvironmentSettings, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
 import { generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../src/core/bicycle';
+import { generateRealisticHumanScene } from '../src/core/character';
 
 const defaultEnv: EnvironmentSettings = {
-  backgroundColor: '#0d1117',
+  backgroundColor: '#ffffff',
   ambientIntensity: 0.6,
   directionalIntensity: 1.2,
   showGrid: true,
@@ -45,6 +46,7 @@ Commands:
   run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
   generate-tree [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic high-poly botanical oak tree
   generate-bicycle [--out <f>] [--format <obj|stl|glb|json>] [--handlebar <drop|flat>] [--pedals <platform|clipless>] [--spokes <n>] [--wheelsize <r>] Synthesize an ultra-realistic mechanically precise bicycle
+  generate-human [--out <f>] [--format <obj|stl|glb|json>] [--clothes] [--accessories] [--export] Synthesize an ultra-realistic anatomical 3D human model
   export <scene.json> --format <obj|stl|glb|json> [--out <f>] Export a scene to 3D geometry formats
   inspect <scene.json>                                    Display detailed summary and metrics of a scene file
   mcp                                                     Launch the Model Context Protocol stdio server
@@ -290,6 +292,89 @@ async function main() {
           tracks: [],
           timeline: defaultTimeline,
           stats: bike.stats,
+        };
+        fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Saved project JSON to: ${outPath}`);
+      }
+      break;
+    }
+
+    case 'generate-human': {
+      const includeClothing = !hasFlag('--no-clothes');
+      const includeAccessories = !hasFlag('--no-accessories');
+      const shirtColor = getArgValue('--shirt-color') || undefined;
+      const pantsColor = getArgValue('--pants-color') || undefined;
+      const shoesColor = getArgValue('--shoes-color') || undefined;
+      const skinColor = getArgValue('--skin-color') || undefined;
+
+      const human = generateRealisticHumanScene({
+        includeClothing,
+        includeAccessories,
+        shirtColor,
+        pantsColor,
+        shoesColor,
+        skinColor,
+      });
+
+      console.log(`[PolyForge Agent] Realistic Human generated: ${human.stats.totalVertices} vertices, ${human.stats.totalTriangles} triangles across ${human.stats.componentsCount} sub-assemblies.`);
+      console.log(`  • Anatomical Body (Skin & Face): ${human.stats.bodyVertices} verts, ${human.stats.bodyTriangles} tris`);
+      if (human.clothingUpperItem || human.clothingLowerItem) {
+        console.log(`  • Layered Garments (Jacket & Jeans): ${human.stats.clothingVertices} verts, ${human.stats.clothingTriangles} tris`);
+      }
+      if (human.footwearItem) {
+        console.log(`  • Footwear (Boots & Soles): ${human.stats.footwearVertices} verts, ${human.stats.footwearTriangles} tris`);
+      }
+      if (human.accessoriesItem) {
+        console.log(`  • Accessories (Glasses, Watch & Belt): ${human.stats.accessoriesVertices} verts, ${human.stats.accessoriesTriangles} tris`);
+      }
+
+      const fmt = (getArgValue('--format', '-f') || 'glb').toLowerCase();
+      const isExportFlag = hasFlag('--export');
+
+      let outPath = getArgValue('--out', '-o');
+      if (!outPath) {
+        if (isExportFlag) {
+          outPath = `/home/sudpy/Downloads/PolyForge-Realistic-Human.${fmt === 'json' ? 'json' : fmt}`;
+        } else {
+          outPath = path.resolve(process.cwd(), `realistic-human.${fmt === 'json' ? 'json' : fmt}`);
+        }
+      }
+
+      const targetDir = path.dirname(outPath);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      if (fmt === 'obj') {
+        const objString = exportSceneToOBJString(human.allItems);
+        fs.writeFileSync(outPath, objString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported human OBJ to: ${outPath}`);
+      } else if (fmt === 'stl') {
+        const stlString = exportSceneToSTLString(human.allItems);
+        fs.writeFileSync(outPath, stlString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported human STL to: ${outPath}`);
+      } else if (fmt === 'glb') {
+        const glbBuffer = await exportSceneToGLTFBuffer(human.allItems, true);
+        fs.writeFileSync(outPath, Buffer.from(glbBuffer as ArrayBuffer));
+        console.log(`[PolyForge Agent] Exported human GLB (${(glbBuffer as ArrayBuffer).byteLength} bytes) to: ${outPath}`);
+      } else if (fmt === 'gltf') {
+        const gltfObj = await exportSceneToGLTFBuffer(human.allItems, false);
+        fs.writeFileSync(outPath, JSON.stringify(gltfObj, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Exported human glTF to: ${outPath}`);
+      } else {
+        const outputData = {
+          version: '1.0.0',
+          generator: 'PolyForge Anatomical Character Engine (Realistic Human)',
+          createdAt: new Date().toISOString(),
+          environment: {
+            ...defaultEnv,
+            backgroundColor: '#ffffff',
+            preset: 'studio' as const,
+          },
+          items: human.allItems,
+          tracks: [],
+          timeline: defaultTimeline,
+          stats: human.stats,
         };
         fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
         console.log(`[PolyForge Agent] Saved project JSON to: ${outPath}`);

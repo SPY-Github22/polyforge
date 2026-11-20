@@ -29,7 +29,11 @@ export type TexturePreset =
   | 'tire_tread'
   | 'brushed_metal'
   | 'leather_perforated'
-  | 'reflector_amber';
+  | 'reflector_amber'
+  | 'skin_tone'
+  | 'denim_fabric'
+  | 'knit_cotton'
+  | 'leather_boot';
 
 export interface CustomGeometryData {
   positions: number[];

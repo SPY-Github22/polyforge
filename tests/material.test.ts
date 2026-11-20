@@ -89,4 +89,17 @@ describe('Material System', () => {
       expect(dataTex.image.data.length).toBe(dataTex.image.width * dataTex.image.height * 4);
     }
   });
+
+  it('generates photorealistic procedural character textures (skin, denim, knit cotton, oiled leather)', () => {
+    const characterPresets = ['skin_tone', 'denim_fabric', 'knit_cotton', 'leather_boot'] as const;
+    for (const preset of characterPresets) {
+      const tex = getProceduralTexture(preset);
+      expect(tex).not.toBeNull();
+      expect(tex).toBeInstanceOf(THREE.DataTexture);
+      const dataTex = tex as THREE.DataTexture;
+      expect(dataTex.image.width).toBeGreaterThanOrEqual(256);
+      expect(dataTex.image.height).toBeGreaterThanOrEqual(256);
+      expect(dataTex.image.data.length).toBe(dataTex.image.width * dataTex.image.height * 4);
+    }
+  });
 });

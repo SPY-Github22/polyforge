@@ -8,6 +8,7 @@ import { ProceduralTemplateId } from '../src/core/ai/types';
 import { AnimationTrack, EnvironmentSettings, SceneItem, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
 import { generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../src/core/bicycle';
+import { generateRealisticHumanScene } from '../src/core/character';
 
 export interface MCPServerState {
   items: SceneItem[];
@@ -20,7 +21,7 @@ export const defaultMCPServerState: MCPServerState = {
   items: [],
   tracks: [],
   environment: {
-    backgroundColor: '#0d1117',
+    backgroundColor: '#ffffff',
     ambientIntensity: 0.6,
     directionalIntensity: 1.2,
     showGrid: true,
@@ -214,6 +215,22 @@ export const MCP_TOOLS = [
         includeDiscBrakes: { type: 'boolean', description: 'Include 160mm vented disc rotors and calipers (default true)' },
         includeReflectors: { type: 'boolean', description: 'Include amber safety reflectors (default true)' },
         animated: { type: 'boolean', description: 'Whether to synthesize a synchronized closed-circuit animation with pedaling, rolling wheels, inward lean, and steering' },
+        clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
+      },
+    },
+  },
+  {
+    name: 'polyforge_generate_human',
+    description: 'Synthesize an ultra-realistic 3D human model (7.8 heads tall, ~1.78m) with anatomical cranium, facial features, torso, limbs, layered jacket/shirt, jeans trousers, oiled boots, eyeglasses, wristwatch, and belt',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        includeClothing: { type: 'boolean', description: 'Whether to include layered garments and footwear (default: true)' },
+        includeAccessories: { type: 'boolean', description: 'Whether to include eyeglasses, wristwatch, and belt (default: true)' },
+        shirtColor: { type: 'string', description: 'Hex color for fitted shirt / jacket' },
+        pantsColor: { type: 'string', description: 'Hex color for denim jeans / trousers' },
+        shoesColor: { type: 'string', description: 'Hex color for footwear boots' },
+        skinColor: { type: 'string', description: 'Hex color for anatomical skin' },
         clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
       },
     },
@@ -618,6 +635,30 @@ export class PolyForgeMCPServer {
           message: 'Successfully synthesized realistic mechanical bicycle.',
           stats: bike.stats,
           components: bike.allItems.map((i) => ({ id: i.id, name: i.name })),
+        };
+      }
+
+      case 'generate_human':
+      case 'polyforge_generate_human': {
+        if (args.clearScene !== false) {
+          this.state.items = [];
+          this.state.tracks = [];
+        }
+
+        const human = generateRealisticHumanScene({
+          includeClothing: args.includeClothing !== false,
+          includeAccessories: args.includeAccessories !== false,
+          shirtColor: args.shirtColor,
+          pantsColor: args.pantsColor,
+          shoesColor: args.shoesColor,
+          skinColor: args.skinColor,
+        });
+
+        this.state.items.push(...human.allItems);
+        return {
+          message: 'Successfully synthesized realistic anatomical human model with layered garments and accessories.',
+          stats: human.stats,
+          components: human.allItems.map((i) => ({ id: i.id, name: i.name })),
         };
       }
 

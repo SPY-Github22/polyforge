@@ -51,7 +51,7 @@ const DEFAULT_MATERIAL: MaterialProperties = {
 };
 
 const DEFAULT_ENVIRONMENT: EnvironmentSettings = {
-  backgroundColor: '#0d1117',
+  backgroundColor: '#ffffff',
   ambientIntensity: 0.6,
   directionalIntensity: 1.2,
   showGrid: true,

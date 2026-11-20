@@ -504,7 +504,218 @@ function createReflectorTexture(): THREE.DataTexture {
 }
 
 /**
- * Procedurally generates 2D textures (Checkerboard, UV Grid, Stripes, Oak Bark, Oak Foliage, Carbon Fiber, Tire Tread, Brushed Metal, Perforated Leather, Reflector)
+ * Creates procedural melanin skin tone DataTexture (256x256).
+ * Features multi-harmonic subcutaneous warmth, delicate epidermal pore micro-patterns,
+ * and melanin tone gradients.
+ */
+function createSkinToneTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    const ny = (y / height) * Math.PI * 4;
+    for (let x = 0; x < width; x++) {
+      const nx = (x / width) * Math.PI * 4;
+      const idx = (y * width + x) * 4;
+
+      // Subcutaneous harmonic warmth
+      const h1 = Math.sin(nx * 1.5 + Math.cos(ny * 1.2) * 0.8) * 0.5;
+      const h2 = Math.cos(ny * 2.3 + Math.sin(nx * 2.1) * 0.6) * 0.3;
+      const subSurface = h1 + h2;
+
+      // Epidermal micro-pores and fine skin grain
+      const poreNoise = Math.sin(x * 3.7 + Math.sin(y * 2.9) * 2.0) * Math.cos(y * 4.1 + Math.cos(x * 2.3) * 2.0);
+      const microPore = poreNoise > 0.45 ? -10 : (poreNoise < -0.45 ? 6 : 0);
+      const fineGrain = (Math.sin(x * 12.3) * Math.cos(y * 11.7)) * 4;
+
+      // Natural neutral albedo base for skin tone with warm peach-tan undertones
+      const baseR = 232;
+      const baseG = 185;
+      const baseB = 162;
+
+      const r = Math.max(0, Math.min(255, Math.floor(baseR + subSurface * 14 + microPore + fineGrain)));
+      const g = Math.max(0, Math.min(255, Math.floor(baseG + subSurface * 10 + microPore * 0.8 + fineGrain * 0.8)));
+      const b = Math.max(0, Math.min(255, Math.floor(baseB + subSurface * 7 + microPore * 0.6 + fineGrain * 0.6)));
+
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 4);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates photorealistic 2x1 diagonal twill weave denim DataTexture (256x256).
+ * Features indigo-dyed warp threads crossing ecru/white weft threads at a 63° twill angle,
+ * with authentic yarn fiber twist and stonewash slub variations.
+ */
+function createDenimFabricTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const threadPitch = 4;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      const threadX = Math.floor(x / threadPitch);
+      const threadY = Math.floor(y / threadPitch);
+      const inThreadX = (x % threadPitch) / threadPitch;
+      const inThreadY = (y % threadPitch) / threadPitch;
+
+      // 2x1 Right-hand twill step: (threadX + 2 * threadY) % 3
+      const twillStep = (threadX + 2 * threadY) % 3;
+      const isWarp = twillStep !== 0;
+
+      // Stonewash slub / faded variation
+      const slub = Math.sin(x * 0.05 + y * 0.03) * 0.15 + Math.cos(x * 0.02 - y * 0.06) * 0.1;
+
+      let r: number, g: number, b: number;
+      if (isWarp) {
+        // Indigo warp yarn: arched cross-section specular highlight
+        const yarnCrown = Math.sin(inThreadX * Math.PI);
+        const fiberTwist = 0.9 + 0.1 * Math.sin(y * 3.5 + x * 1.5);
+        const indigoVal = (38 + yarnCrown * 26 + slub * 35) * fiberTwist;
+
+        r = Math.floor(indigoVal * 0.65);
+        g = Math.floor(indigoVal * 0.85);
+        b = Math.floor(indigoVal * 1.45);
+      } else {
+        // Ecru un-dyed weft yarn peeking through at twill step
+        const yarnCrown = Math.sin(inThreadY * Math.PI);
+        const ecruVal = (155 + yarnCrown * 45 + slub * 20);
+
+        r = Math.floor(ecruVal * 0.96);
+        g = Math.floor(ecruVal * 0.98);
+        b = Math.floor(ecruVal * 1.05);
+      }
+
+      // Yarn crevice shadow
+      const crevice = (inThreadX < 0.1 || inThreadX > 0.9 || inThreadY < 0.1 || inThreadY > 0.9) ? 0.72 : 1.0;
+
+      data[idx] = Math.max(0, Math.min(255, Math.floor(r * crevice)));
+      data[idx + 1] = Math.max(0, Math.min(255, Math.floor(g * crevice)));
+      data[idx + 2] = Math.max(0, Math.min(255, Math.floor(b * crevice)));
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(12, 12);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates interlocking textile knit cotton micro-pattern DataTexture (256x256).
+ * Features interlocking jersey stitch wale columns and course loops with soft cotton fiber nap.
+ */
+function createKnitCottonTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const loopWidth = 8;
+  const loopHeight = 12;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      const row = Math.floor(y / loopHeight);
+      const xOffset = (row % 2 === 1) ? loopWidth / 2 : 0;
+      const loopX = (x + xOffset) % loopWidth;
+      const loopY = y % loopHeight;
+
+      const uNorm = (loopX / loopWidth) * 2 - 1;
+      const vNorm = (loopY / loopHeight) * 2 - 1;
+
+      // V-shaped jersey knit loop formula
+      const vCurve = Math.abs(uNorm) - (1.0 - (vNorm + 1) * 0.4);
+      const loopIntensity = Math.exp(-vCurve * vCurve * 8.0);
+
+      // Soft cotton fiber nap micro-noise
+      const nap = Math.sin(x * 2.1) * Math.cos(y * 2.3) * 6;
+
+      // Neutral high-albedo knit substrate (tintable by material color)
+      const base = 195 + loopIntensity * 48 + nap;
+      const val = Math.max(0, Math.min(255, Math.floor(base)));
+
+      data[idx] = val;
+      data[idx + 1] = Math.floor(val * 0.99);
+      data[idx + 2] = Math.floor(val * 1.01);
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(16, 16);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates deep oiled leather boot grain DataTexture (256x256).
+ * Features pebbled cowhide epidermal cells, natural crevice micro-shadows,
+ * and burnished highlight accents for boots and leather accessories.
+ */
+function createLeatherBootTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const cellSize = 16;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      const cx = (x % cellSize) - cellSize / 2;
+      const cy = (y % cellSize) - cellSize / 2;
+      const distCenter = Math.sqrt(cx * cx + cy * cy) / (cellSize * 0.7);
+
+      const cellJitter = Math.sin(x * 0.4) * Math.cos(y * 0.4) * 0.15;
+      const pebble = Math.max(0, 1.0 - (distCenter + cellJitter));
+
+      const crease1 = Math.sin(x * 0.15 + y * 0.08) * Math.cos(x * 0.05 - y * 0.12);
+      const creaseFactor = crease1 > 0.6 ? 0.75 : 1.0;
+
+      const baseTone = 52 + pebble * 42;
+      const finalTone = baseTone * creaseFactor;
+
+      const r = Math.max(0, Math.min(255, Math.floor(finalTone * 1.35)));
+      const g = Math.max(0, Math.min(255, Math.floor(finalTone * 0.95)));
+      const b = Math.max(0, Math.min(255, Math.floor(finalTone * 0.72)));
+
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Procedurally generates 2D textures (Checkerboard, UV Grid, Stripes, Oak Bark, Oak Foliage, Carbon Fiber, Tire Tread, Brushed Metal, Perforated Leather, Reflector, Skin Tone, Denim Fabric, Knit Cotton, Leather Boot)
  * Operates purely in memory using Three.js DataTexture; works identically in browser and Node.js CLI.
  */
 export function getProceduralTexture(type: TexturePreset): THREE.Texture | null {
@@ -547,6 +758,18 @@ export function getProceduralTexture(type: TexturePreset): THREE.Texture | null 
       break;
     case 'reflector_amber':
       tex = createReflectorTexture();
+      break;
+    case 'skin_tone':
+      tex = createSkinToneTexture();
+      break;
+    case 'denim_fabric':
+      tex = createDenimFabricTexture();
+      break;
+    case 'knit_cotton':
+      tex = createKnitCottonTexture();
+      break;
+    case 'leather_boot':
+      tex = createLeatherBootTexture();
       break;
     default:
       return null;
