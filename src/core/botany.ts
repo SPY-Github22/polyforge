@@ -8,11 +8,11 @@ export interface BotanicalTreeOptions {
   crownSpread?: number;       // canopy spread radius, default ~5.2
   scaffoldBranches?: number;  // count of major limbs, default 6
   radialSegments?: number;    // cross-section resolution, default 14
-  leafCount?: number;         // number of leaf sprays/clusters, default 1600
-  leafScale?: number;         // size of individual leaf blades, default 0.32
-  barkColor?: string;         // default '#3e2716'
-  leafColor1?: string;        // mature oak leaf, default '#27521e'
-  leafColor2?: string;        // young/sunlit oak leaf, default '#46832a'
+  leafCount?: number;         // number of leaf sprays/clusters, default 3800
+  leafScale?: number;         // size of individual leaf blades, default 0.48
+  barkColor?: string;         // default '#ffffff'
+  leafColor1?: string;        // mature oak leaf, default '#ffffff'
+  leafColor2?: string;        // young/sunlit oak leaf, default '#ffffff'
 }
 
 export interface BotanicalTreeResult {
@@ -132,24 +132,6 @@ function loftBranch(
 
     const n = normals[i];
     const b = binormals[i];
-    const yVal = node.point.y;
-
-    // Height-based bark base color
-    let baseR = 0.26;
-    let baseG = 0.18;
-    let baseB = 0.12;
-
-    if (yVal < 0.8) {
-      // Base near ground: rich earth umber
-      baseR = 0.20;
-      baseG = 0.14;
-      baseB = 0.09;
-    } else if (yVal > 4.5) {
-      // Upper crown twigs: weathered grey-brown
-      baseR = 0.35;
-      baseG = 0.28;
-      baseB = 0.20;
-    }
 
     // Radial ring vertices (+ 1 for UV seam wrap)
     for (let j = 0; j <= radialSegments; j++) {
@@ -175,9 +157,10 @@ function loftBranch(
       outNormals.push(nx, ny, nz);
       outUvs.push(j / radialSegments, currentV);
 
-      // Vertex color with crevice Ambient Occlusion: ridges are brighter, furrows darker
+      // Vertex color representing crevice Ambient Occlusion (AO) centered around 1.0:
+      // Ridges are brighter (~1.0 - 1.15), furrows darker (~0.7 - 0.8)
       const ao = THREE.MathUtils.clamp(furrow * 0.95, 0.7, 1.15);
-      outColors.push(baseR * ao, baseG * ao, baseB * ao);
+      outColors.push(ao, ao, ao);
     }
   }
 
@@ -208,7 +191,7 @@ function loftBranch(
     outPositions.push(startNode.point.x, startNode.point.y, startNode.point.z);
     outNormals.push(revNormal.x, revNormal.y, revNormal.z);
     outUvs.push(0.5, 0.5);
-    outColors.push(0.18, 0.12, 0.08);
+    outColors.push(0.75, 0.75, 0.75); // Ground crevice AO
 
     const firstRing = ringVertexStart;
     for (let j = 0; j < radialSegments; j++) {
@@ -225,7 +208,7 @@ function loftBranch(
     outPositions.push(endNode.point.x, endNode.point.y, endNode.point.z);
     outNormals.push(fwdNormal.x, fwdNormal.y, fwdNormal.z);
     outUvs.push(0.5, 0.5);
-    outColors.push(0.32, 0.25, 0.18);
+    outColors.push(1.0, 1.0, 1.0); // Open tip AO
 
     const lastRing = ringVertexStart + (nodes.length - 1) * ringStride;
     for (let j = 0; j < radialSegments; j++) {
@@ -258,10 +241,15 @@ function createOakLeafSpray(
   const side = new THREE.Vector3().crossVectors(fwd, upDir).normalize();
   const up = new THREE.Vector3().crossVectors(side, fwd).normalize();
 
-  // Chlorophyll colors for vertex tinting
-  const stemCol = isYoung ? [0.38, 0.36, 0.18] : [0.30, 0.28, 0.14];
-  const leafBaseCol = isYoung ? [0.24, 0.48, 0.16] : [0.15, 0.35, 0.12];
-  const leafTipCol = isYoung ? [0.45, 0.72, 0.22] : [0.28, 0.55, 0.18];
+  // Ambient Occlusion scalar values centered around 1.0:
+  // Petiole base is tucked deep in cluster/crevice (0.78-0.84), mid leaf (0.92-0.96), tip is open to ambient light (1.00-1.05)
+  const aoBase = isYoung ? 0.84 : 0.78;
+  const aoMid = isYoung ? 0.96 : 0.92;
+  const aoTip = isYoung ? 1.05 : 1.00;
+
+  const stemCol = [aoBase, aoBase, aoBase];
+  const leafBaseCol = [aoMid, aoMid, aoMid];
+  const leafTipCol = [aoTip, aoTip, aoTip];
 
   // Leaf configuration within the spray:
   // 3-4 leaves angled in 3D around the twig stem
@@ -384,8 +372,8 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   const spread = options.crownSpread ?? 5.2;
   const numScaffold = options.scaffoldBranches ?? 6;
   const radialSegments = options.radialSegments ?? 14;
-  const totalLeafSprays = options.leafCount ?? 1600;
-  const leafScale = options.leafScale ?? 0.32;
+  const totalLeafSprays = options.leafCount ?? 3800;
+  const leafScale = options.leafScale ?? 0.48;
 
   const barkPos: number[] = [];
   const barkNorm: number[] = [];
@@ -529,6 +517,19 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
       false,
       false
     );
+
+    // Distribute canopy foliage anchors along middle-to-outer reach of scaffold limb
+    for (let s = Math.floor(limbNodes.length * 0.35); s < limbNodes.length; s++) {
+      const node = limbNodes[s];
+      const sunExposure = Math.min(1.0, (node.point.y / H) * 0.75 + (node.point.length() / spread) * 0.45);
+      const outVec = new THREE.Vector3(node.point.x, 0, node.point.z).normalize();
+      terminalTwigAnchors.push({
+        point: node.point.clone().add(new THREE.Vector3(outVec.x * 0.35, 0.2, outVec.z * 0.35)),
+        direction: outVec.clone().add(new THREE.Vector3(0, 0.5, 0)).normalize(),
+        level: 1,
+        sunExposure,
+      });
+    }
   }
 
   // ==========================================
@@ -593,6 +594,18 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
         false
       );
 
+      // Distribute foliage anchors along secondary bough
+      for (let s = 1; s < secNodes.length; s++) {
+        const node = secNodes[s];
+        const sunExposure = Math.min(1.0, (node.point.y / H) * 0.8 + (node.point.length() / spread) * 0.4);
+        terminalTwigAnchors.push({
+          point: node.point.clone().add(new THREE.Vector3((rng() - 0.5) * 0.25, 0.15, (rng() - 0.5) * 0.25)),
+          direction: secDir.clone().add(new THREE.Vector3(0, 0.45, 0)).normalize(),
+          level: 2,
+          sunExposure,
+        });
+      }
+
       // Spawn tertiary twig sprays off secondary branch
       const twigCount = 3 + Math.floor(rng() * 3);
       for (let tw = 0; tw < twigCount; tw++) {
@@ -632,15 +645,18 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
           true
         );
 
-        // Record anchor point for leaf foliage sprays
-        const tip = twNodes[twNodes.length - 1];
-        const sunExposure = Math.min(1.0, (tip.point.y / H) * 0.8 + (tip.point.length() / spread) * 0.4);
-        terminalTwigAnchors.push({
-          point: tip.point.clone(),
-          direction: twDir.clone(),
-          level: 3,
-          sunExposure,
-        });
+        // Record anchor points along and at tip of tertiary twig
+        for (let t = 1; t < twNodes.length; t++) {
+          const node = twNodes[t];
+          const isTip = t === twNodes.length - 1;
+          const sunExposure = Math.min(1.0, (node.point.y / H) * 0.85 + (node.point.length() / spread) * 0.45);
+          terminalTwigAnchors.push({
+            point: node.point.clone(),
+            direction: twDir.clone(),
+            level: isTip ? 3 : 2,
+            sunExposure: isTip ? Math.min(1.0, sunExposure * 1.1) : sunExposure,
+          });
+        }
       }
     }
   }
@@ -648,65 +664,68 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   // ==========================================
   // 4. LUSH DUAL-CANOPY OAK FOLIAGE SYNTHESIS
   // ==========================================
-  const spraysPerAnchor = Math.max(1, Math.floor(totalLeafSprays / Math.max(1, terminalTwigAnchors.length)));
+  const anchorCount = Math.max(1, terminalTwigAnchors.length);
 
-  for (const anchor of terminalTwigAnchors) {
-    for (let l = 0; l < spraysPerAnchor; l++) {
-      // Cluster leaf sprays in organic volumetric cloud around twig tip
-      const offsetRadius = rng() * 0.65;
-      const phi = rng() * Math.PI * 2;
-      const theta = rng() * Math.PI * 0.7; // canopy bias upwards
+  for (let i = 0; i < totalLeafSprays; i++) {
+    const anchor = terminalTwigAnchors[i % anchorCount];
 
-      const sprayOrigin = anchor.point.clone().add(new THREE.Vector3(
-        Math.sin(theta) * Math.cos(phi) * offsetRadius,
-        Math.cos(theta) * offsetRadius * 0.8,
-        Math.sin(theta) * Math.sin(phi) * offsetRadius
-      ));
+    // Cluster leaf sprays in organic volumetric billows around branch anchors
+    // Billow radius varies with branch tier to form lush, overlapping foliage canopies
+    const billowRadius = anchor.level === 1 ? 0.95 : anchor.level === 2 ? 0.78 : 0.60;
+    const offsetRadius = Math.pow(rng(), 0.7) * billowRadius;
+    const phi = rng() * Math.PI * 2;
+    const theta = rng() * Math.PI * 0.78; // canopy bias upwards
 
-      // Leaves angle outwards from tree center and upwards towards the sky
-      const outDir = new THREE.Vector3(sprayOrigin.x, 0, sprayOrigin.z).normalize();
-      const sprayDir = outDir.clone()
-        .add(new THREE.Vector3(0, 0.35 + rng() * 0.4, 0))
-        .add(new THREE.Vector3((rng() - 0.5) * 0.5, (rng() - 0.5) * 0.3, (rng() - 0.5) * 0.5))
-        .normalize();
+    const sprayOrigin = anchor.point.clone().add(new THREE.Vector3(
+      Math.sin(theta) * Math.cos(phi) * offsetRadius,
+      Math.cos(theta) * offsetRadius * 0.85,
+      Math.sin(theta) * Math.sin(phi) * offsetRadius
+    ));
 
-      const sprayUp = new THREE.Vector3(0, 1, 0)
-        .add(new THREE.Vector3((rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.3))
-        .normalize();
+    // Leaves angle outwards from tree center and upwards towards the sky
+    const outDir = new THREE.Vector3(sprayOrigin.x, 0, sprayOrigin.z).normalize();
+    const sprayDir = outDir.clone()
+      .add(new THREE.Vector3(0, 0.4 + rng() * 0.45, 0))
+      .add(new THREE.Vector3((rng() - 0.5) * 0.5, (rng() - 0.5) * 0.3, (rng() - 0.5) * 0.5))
+      .normalize();
 
-      const curLeafScale = leafScale * THREE.MathUtils.lerp(0.85, 1.25, rng());
+    const sprayUp = new THREE.Vector3(0, 1, 0)
+      .add(new THREE.Vector3((rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.3))
+      .normalize();
 
-      // Assign to Mature Oak Foliage (70%) or Young Sunlit Foliage (30%)
-      const isSunlitTip = anchor.sunExposure > 0.62 && rng() > 0.40;
-      if (isSunlitTip) {
-        createOakLeafSpray(
-          sprayOrigin,
-          sprayDir,
-          sprayUp,
-          curLeafScale,
-          true, // Young sunlit leaf
-          rng,
-          leavesPos2,
-          leavesNorm2,
-          leavesUv2,
-          leavesColors2,
-          leavesIdx2
-        );
-      } else {
-        createOakLeafSpray(
-          sprayOrigin,
-          sprayDir,
-          sprayUp,
-          curLeafScale,
-          false, // Mature oak leaf
-          rng,
-          leavesPos1,
-          leavesNorm1,
-          leavesUv1,
-          leavesColors1,
-          leavesIdx1
-        );
-      }
+    // Scale variation: lush, overlapping foliage billows
+    const curLeafScale = leafScale * THREE.MathUtils.lerp(0.85, 1.3, rng());
+
+    // Assign to Mature Oak Foliage (68%) or Young Sunlit Foliage (32%)
+    const isSunlitTip = anchor.sunExposure > 0.58 && rng() > 0.38;
+    if (isSunlitTip) {
+      createOakLeafSpray(
+        sprayOrigin,
+        sprayDir,
+        sprayUp,
+        curLeafScale,
+        true, // Young sunlit leaf
+        rng,
+        leavesPos2,
+        leavesNorm2,
+        leavesUv2,
+        leavesColors2,
+        leavesIdx2
+      );
+    } else {
+      createOakLeafSpray(
+        sprayOrigin,
+        sprayDir,
+        sprayUp,
+        curLeafScale,
+        false, // Mature oak leaf
+        rng,
+        leavesPos1,
+        leavesNorm1,
+        leavesUv1,
+        leavesColors1,
+        leavesIdx1
+      );
     }
   }
 
@@ -714,7 +733,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   // 5. PACK SCENE ITEMS & MATERIALS
   // ==========================================
   const barkMat: MaterialProperties = {
-    color: options.barkColor ?? '#3e2716',
+    color: options.barkColor ?? '#ffffff',
     roughness: 0.92,
     metalness: 0.04,
     emissive: '#000000',
@@ -728,7 +747,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   };
 
   const matureLeafMat: MaterialProperties = {
-    color: options.leafColor1 ?? '#27521e',
+    color: options.leafColor1 ?? '#ffffff',
     roughness: 0.42,
     metalness: 0.06,
     emissive: '#081707',
@@ -744,7 +763,7 @@ export function generateBotanicalOakTree(options: BotanicalTreeOptions = {}): Bo
   };
 
   const youngLeafMat: MaterialProperties = {
-    color: options.leafColor2 ?? '#46832a',
+    color: options.leafColor2 ?? '#ffffff',
     roughness: 0.38,
     metalness: 0.04,
     emissive: '#0d2208',

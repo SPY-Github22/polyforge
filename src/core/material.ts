@@ -330,8 +330,16 @@ export function createMaterial(
       const texture = getProceduralTexture(props.texturePreset);
       const alphaTest = typeof props.alphaTest === 'number' ? props.alphaTest : 0;
       const isTransparent = props.transparent || (alphaTest === 0 && (props.transmission > 0 || props.opacity < 1.0));
+
+      // For textured materials with vertex colors (e.g. bark and oak foliage),
+      // Three.js multiplies material.color * vertexColors * textureMap.
+      // Setting a dark material.color causes triple color multiplication that extinguishes light to pitch black.
+      // For textured materials with vertex colors, material.color must be #ffffff (white) to preserve texture diffuse.
+      const isTexturedWithVertexColors = !!texture && vertexColors;
+      const effectiveColor = isTexturedWithVertexColors ? '#ffffff' : props.color;
+
       const mat = new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(props.color),
+        color: new THREE.Color(effectiveColor),
         roughness: props.roughness,
         metalness: props.metalness,
         emissive: new THREE.Color(props.emissive),
@@ -366,7 +374,11 @@ export function updateMaterial(
   material.side = side;
 
   if (material instanceof THREE.MeshPhysicalMaterial && shadingMode === 'rendered') {
-    material.color.set(props.color);
+    const texture = getProceduralTexture(props.texturePreset);
+    const isTexturedWithVertexColors = !!texture && (!!material.vertexColors || !!props.vertexColors);
+    const effectiveColor = isTexturedWithVertexColors ? '#ffffff' : props.color;
+
+    material.color.set(effectiveColor);
     material.roughness = props.roughness;
     material.metalness = props.metalness;
     material.emissive.set(props.emissive);
@@ -376,7 +388,7 @@ export function updateMaterial(
     const alphaTest = typeof props.alphaTest === 'number' ? props.alphaTest : 0;
     material.transparent = props.transparent || (alphaTest === 0 && (props.transmission > 0 || props.opacity < 1.0));
     material.wireframe = props.wireframe;
-    material.map = getProceduralTexture(props.texturePreset);
+    material.map = texture;
     if (typeof props.alphaTest === 'number') {
       material.alphaTest = props.alphaTest;
     }

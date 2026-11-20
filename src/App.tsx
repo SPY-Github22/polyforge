@@ -503,6 +503,12 @@ export const App: React.FC = () => {
       setTracks(data.tracks || []);
       if (data.environment) setEnvironment(data.environment);
       setSelectedId(data.items.length > 0 ? data.items[0].id : null);
+      // Center orbit controls on the loaded model's bounding box center (y ≈ 4.5m for trees)
+      setTimeout(() => {
+        if (engineRef.current) {
+          engineRef.current.focusObject(null);
+        }
+      }, 60);
     } catch (err) {
       alert(`Failed to load project file: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -642,7 +648,7 @@ export const App: React.FC = () => {
 
       // Camera Focus & Reset Hotkeys
       if (key === 'f') {
-        if (selectedId && engineRef.current) {
+        if (engineRef.current) {
           engineRef.current.focusObject(selectedId);
         }
       } else if (e.key === 'Home') {
@@ -741,7 +747,7 @@ export const App: React.FC = () => {
           selectedObjectName={selectedItem ? selectedItem.name : null}
           onResetCamera={() => setCameraView('perspective')}
           onFocusSelected={() => {
-            if (selectedId && engineRef.current) {
+            if (engineRef.current) {
               engineRef.current.focusObject(selectedId);
             }
           }}

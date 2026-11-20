@@ -122,12 +122,14 @@ async function main() {
     case 'generate-tree': {
       console.log('[PolyForge Agent] Synthesizing realistic botanical oak tree...');
       const seed = parseInt(getArgValue('--seed') || '2026', 10);
-      const leafCount = parseInt(getArgValue('--leaf-count') || '1600', 10);
+      const leafCount = parseInt(getArgValue('--leaf-count') || '3800', 10);
       const height = parseFloat(getArgValue('--height') || '9.2');
+      const leafScale = parseFloat(getArgValue('--leaf-scale') || '0.48');
 
       const tree = generateBotanicalOakTree({
         seed,
         leafCount,
+        leafScale,
         trunkHeight: height,
         radialSegments: 14,
       });

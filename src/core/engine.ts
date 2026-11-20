@@ -39,6 +39,7 @@ export class Engine {
   private dirLight: THREE.DirectionalLight;
   private hemiLight: THREE.HemisphereLight;
   private studioRimLight: THREE.DirectionalLight;
+  private ambientBounceLight: THREE.DirectionalLight;
 
   // Dedicated container for user meshes (isolates 3D models from helpers for clean export)
   public userMeshGroup: THREE.Group;
@@ -143,27 +144,35 @@ export class Engine {
     this.scene.add(this.axesHelper);
 
     // 7. Lighting
-    this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x161b22, 0.6);
+    this.hemiLight = new THREE.HemisphereLight(0xffffff, 0x475569, 0.75);
     this.hemiLight.position.set(0, 20, 0);
     this.scene.add(this.hemiLight);
 
-    this.dirLight = new THREE.DirectionalLight(0xfff5ea, 1.2);
-    this.dirLight.position.set(5, 10, 7);
+    this.dirLight = new THREE.DirectionalLight(0xfff5ea, 1.25);
+    this.dirLight.position.set(5, 12, 7);
     this.dirLight.castShadow = true;
     this.dirLight.shadow.mapSize.width = 2048;
     this.dirLight.shadow.mapSize.height = 2048;
     this.dirLight.shadow.camera.near = 0.5;
-    this.dirLight.shadow.camera.far = 25;
-    this.dirLight.shadow.camera.left = -6;
-    this.dirLight.shadow.camera.right = 6;
-    this.dirLight.shadow.camera.top = 6;
-    this.dirLight.shadow.camera.bottom = -6;
+    this.dirLight.shadow.camera.far = 30;
+    this.dirLight.shadow.camera.left = -8;
+    this.dirLight.shadow.camera.right = 8;
+    this.dirLight.shadow.camera.top = 8;
+    this.dirLight.shadow.camera.bottom = -8;
     this.dirLight.shadow.bias = -0.0005;
     this.scene.add(this.dirLight);
 
-    this.studioRimLight = new THREE.DirectionalLight(0x60a5fa, 0.4);
+    this.studioRimLight = new THREE.DirectionalLight(0x60a5fa, 0.45);
     this.studioRimLight.position.set(-6, 5, -5);
     this.scene.add(this.studioRimLight);
+
+    // Soft ambient bounce / fill light pointing upward from below
+    // Natural upward ground bounce so undersides of canopies have soft, natural illumination instead of pitch black
+    this.ambientBounceLight = new THREE.DirectionalLight(0xcfd8dc, 0.55);
+    this.ambientBounceLight.position.set(0, -10, 0);
+    this.ambientBounceLight.target.position.set(0, 5, 0);
+    this.scene.add(this.ambientBounceLight);
+    this.scene.add(this.ambientBounceLight.target);
 
     // 8. Event listeners
     this.renderer.domElement.addEventListener('pointerdown', this.onPointerDown);
@@ -255,7 +264,11 @@ export class Engine {
 
   public setCameraView(view: CameraView) {
     const target = this.orbitControls.target;
-    const dist = 7;
+    const box = new THREE.Box3().setFromObject(this.userMeshGroup);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = maxDim > 1 ? Math.max(7, maxDim * 1.35) : 7;
 
     switch (view) {
       case 'front':
@@ -271,7 +284,7 @@ export class Engine {
         this.camera.position.set(target.x + dist * 0.7, target.y + dist * 0.7, target.z + dist * 0.7);
         break;
       case 'perspective':
-        this.camera.position.set(4, 3, 5);
+        this.camera.position.set(target.x + dist * 0.65, target.y + dist * 0.4, target.z + dist * 0.85);
         break;
     }
 
@@ -279,11 +292,43 @@ export class Engine {
     this.orbitControls.update();
   }
 
-  public focusObject(id: string | null) {
-    if (!id || !this.objectMap.has(id)) return;
-    const mesh = this.objectMap.get(id)!;
-    this.orbitControls.target.copy(mesh.position);
-    this.orbitControls.update();
+  /**
+   * Centers orbit controls on the bounding box center of the target object,
+   * or the bounding box center of all meshes in the scene if id is omitted/null.
+   */
+  public focusObject(id: string | null = null) {
+    const box = new THREE.Box3();
+
+    if (id && this.objectMap.has(id)) {
+      const mesh = this.objectMap.get(id)!;
+      mesh.updateMatrixWorld(true);
+      box.setFromObject(mesh);
+    } else if (this.userMeshGroup.children.length > 0) {
+      this.userMeshGroup.updateMatrixWorld(true);
+      box.setFromObject(this.userMeshGroup);
+    }
+
+    if (!box.isEmpty()) {
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      this.orbitControls.target.copy(center);
+
+      // Frame camera comfortably to view the entire object / model
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const maxDim = Math.max(size.x, size.y, size.z);
+      if (maxDim > 1.5) {
+        const dir = new THREE.Vector3().subVectors(this.camera.position, center).normalize();
+        if (dir.lengthSq() < 0.001) dir.set(0.65, 0.45, 0.85).normalize();
+        const dist = Math.max(8, maxDim * 1.35);
+        this.camera.position.copy(center).addScaledVector(dir, dist);
+      }
+      this.orbitControls.update();
+    } else if (id && this.objectMap.has(id)) {
+      const mesh = this.objectMap.get(id)!;
+      this.orbitControls.target.copy(mesh.position);
+      this.orbitControls.update();
+    }
   }
 
   public setSelectedObject(id: string | null) {
@@ -303,6 +348,9 @@ export class Engine {
   public updateEnvironment(settings: EnvironmentSettings) {
     this.scene.background = new THREE.Color(settings.backgroundColor);
     this.hemiLight.intensity = settings.ambientIntensity;
+    if (this.ambientBounceLight) {
+      this.ambientBounceLight.intensity = settings.ambientIntensity * 0.75;
+    }
     this.dirLight.intensity = settings.directionalIntensity;
     this.dirLight.castShadow = settings.shadows;
     this.gridHelper.visible = settings.showGrid;
@@ -313,23 +361,31 @@ export class Engine {
       case 'sunset':
         this.dirLight.color.set('#ff7a3d');
         this.hemiLight.color.set('#ffcba4');
+        this.hemiLight.groundColor.set('#643b1f');
         this.studioRimLight.color.set('#a855f7');
+        if (this.ambientBounceLight) this.ambientBounceLight.color.set('#ffb288');
         break;
       case 'cyberpunk':
         this.dirLight.color.set('#06b6d4');
         this.hemiLight.color.set('#ec4899');
+        this.hemiLight.groundColor.set('#3b0764');
         this.studioRimLight.color.set('#8b5cf6');
+        if (this.ambientBounceLight) this.ambientBounceLight.color.set('#818cf8');
         break;
       case 'dawn':
         this.dirLight.color.set('#fed7aa');
         this.hemiLight.color.set('#bae6fd');
+        this.hemiLight.groundColor.set('#334155');
         this.studioRimLight.color.set('#f43f5e');
+        if (this.ambientBounceLight) this.ambientBounceLight.color.set('#fed7aa');
         break;
       case 'studio':
       default:
         this.dirLight.color.set('#fff5ea');
         this.hemiLight.color.set('#ffffff');
+        this.hemiLight.groundColor.set('#475569');
         this.studioRimLight.color.set('#60a5fa');
+        if (this.ambientBounceLight) this.ambientBounceLight.color.set('#cbd5e1');
         break;
     }
   }
@@ -493,6 +549,10 @@ export class Engine {
 
     window.removeEventListener('resize', this.onWindowResize);
     this.renderer.domElement.removeEventListener('pointerdown', this.onPointerDown);
+
+    this.scene.remove(this.ambientBounceLight.target);
+    this.scene.remove(this.ambientBounceLight);
+    this.ambientBounceLight.dispose();
 
     this.transformControls.dispose();
     this.orbitControls.dispose();

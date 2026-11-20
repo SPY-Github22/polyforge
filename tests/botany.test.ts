@@ -71,24 +71,44 @@ describe('Botanical Engine & High-Poly Tree Generator', () => {
       .toBeCloseTo(resB.trunkItem.geometryParams?.customGeometry?.positions[0]!);
   });
 
-  it('populates vertex colors for ambient occlusion and botanical tinting', () => {
+  it('populates vertex colors for ambient occlusion scalar values centered around 1.0', () => {
     const result = generateBotanicalOakTree({ seed: 123, leafCount: 50 });
 
-    // Trunk vertex colors
+    // Verify materials use white color to preserve texture diffuse without triple multiplication
+    expect(result.trunkItem.material.color).toBe('#ffffff');
+    expect(result.matureLeavesItem.material.color).toBe('#ffffff');
+    expect(result.youngLeavesItem.material.color).toBe('#ffffff');
+
+    // Trunk vertex colors represent AO scalars (r === g === b)
     const barkColors = result.trunkItem.geometryParams?.customGeometry?.colors;
     expect(barkColors).toBeDefined();
     expect(barkColors?.length).toBe(result.trunkItem.geometryParams?.customGeometry?.positions.length);
 
-    // Foliage vertex colors
+    // Foliage vertex colors represent AO scalars (r === g === b)
     const leafColors = result.matureLeavesItem.geometryParams?.customGeometry?.colors;
     expect(leafColors).toBeDefined();
     expect(leafColors?.length).toBe(result.matureLeavesItem.geometryParams?.customGeometry?.positions.length);
 
-    // Verify colors are within valid [0, 1] RGB range
-    for (let i = 0; i < Math.min(100, barkColors!.length); i++) {
-      expect(barkColors![i]).toBeGreaterThanOrEqual(0);
-      expect(barkColors![i]).toBeLessThanOrEqual(1.5);
+    // Verify colors are valid AO scalars (r === g === b) centered around 1.0
+    for (let i = 0; i < Math.min(90, barkColors!.length); i += 3) {
+      expect(barkColors![i]).toBeGreaterThanOrEqual(0.65);
+      expect(barkColors![i]).toBeLessThanOrEqual(1.25);
+      expect(barkColors![i]).toBeCloseTo(barkColors![i + 1], 4);
+      expect(barkColors![i + 1]).toBeCloseTo(barkColors![i + 2], 4);
     }
+
+    for (let i = 0; i < Math.min(90, leafColors!.length); i += 3) {
+      expect(leafColors![i]).toBeGreaterThanOrEqual(0.70);
+      expect(leafColors![i]).toBeLessThanOrEqual(1.15);
+      expect(leafColors![i]).toBeCloseTo(leafColors![i + 1], 4);
+      expect(leafColors![i + 1]).toBeCloseTo(leafColors![i + 2], 4);
+    }
+  });
+
+  it('generates dense canopy foliage with default 3800 leaf sprays across all branch tiers', () => {
+    const result = generateBotanicalOakTree({ seed: 42 }); // Uses default leafCount 3800
+    expect(result.stats.leafTriangles).toBeGreaterThanOrEqual(3500 * 4); // each spray has multiple triangles
+    expect(result.stats.totalVertices).toBeGreaterThan(50000);
   });
 
   it('generates flared root buttresses that ground at y = 0 with outward flare', () => {

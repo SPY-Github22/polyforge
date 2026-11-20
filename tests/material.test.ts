@@ -62,4 +62,18 @@ describe('Material System', () => {
     const tex = getProceduralTexture('none');
     expect(tex).toBeNull();
   });
+
+  it('sets material color to white for textured materials with vertexColors to avoid triple multiplication', () => {
+    const mat = createMaterial({
+      ...defaultProps,
+      color: '#3e2716',
+      texturePreset: 'bark_oak',
+      vertexColors: true,
+    }, 'rendered') as THREE.MeshPhysicalMaterial;
+
+    // Should be #ffffff to prevent darkening texture diffuse
+    expect(mat.color.getHexString()).toBe('ffffff');
+    expect(mat.map).not.toBeNull();
+    expect(mat.vertexColors).toBe(true);
+  });
 });
