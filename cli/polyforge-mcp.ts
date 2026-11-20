@@ -6,6 +6,7 @@ import { getSystemPromptForLLM, serializeSceneForLLM } from '../src/core/ai/llm'
 import { exportSceneToOBJString, exportSceneToSTLString, parseProjectFile } from '../src/core/io';
 import { ProceduralTemplateId } from '../src/core/ai/types';
 import { AnimationTrack, EnvironmentSettings, SceneItem, TimelineState } from '../src/types';
+import { generateBotanicalOakTree } from '../src/core/botany';
 
 export interface MCPServerState {
   items: SceneItem[];

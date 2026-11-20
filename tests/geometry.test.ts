@@ -123,4 +123,51 @@ describe('Geometry Engine', () => {
     const emptySub = applySubdivisionRefinement(empty, 1);
     expect(emptySub).toBeDefined();
   });
+
+  it('creates custom geometry from vertex positions, uvs, and indices', () => {
+    const customGeo = createPrimitiveGeometry('custom', {
+      customGeometry: {
+        positions: [
+          0, 0, 0,
+          1, 0, 0,
+          0, 1, 0,
+        ],
+        uvs: [
+          0, 0,
+          1, 0,
+          0, 1,
+        ],
+        indices: [0, 1, 2],
+      },
+    });
+
+    expect(customGeo.getAttribute('position')).toBeDefined();
+    expect(customGeo.getAttribute('position').count).toBe(3);
+    expect(customGeo.getAttribute('uv')).toBeDefined();
+    expect(customGeo.getAttribute('normal')).toBeDefined();
+    expect(customGeo.index).toBeDefined();
+    expect(customGeo.index!.count).toBe(3);
+  });
+
+  it('applies bark furrow and taper modifiers modifying vertex coordinates', () => {
+    const cylinder = createPrimitiveGeometry('cylinder', { radialSegments: 16, heightSegments: 16 });
+    const origPos = cylinder.getAttribute('position').clone();
+
+    const furrowed = applyModifiers(cylinder, [
+      { id: 'm1', type: 'bark_furrow', factor: 1.0, enabled: true },
+      { id: 'm2', type: 'taper', factor: 0.5, enabled: true },
+    ]);
+
+    const modifiedPos = furrowed.getAttribute('position');
+    expect(modifiedPos.count).toBe(origPos.count);
+
+    let changed = false;
+    for (let i = 0; i < modifiedPos.count; i++) {
+      if (Math.abs(modifiedPos.getX(i) - origPos.getX(i)) > 0.001) {
+        changed = true;
+        break;
+      }
+    }
+    expect(changed).toBe(true);
+  });
 });

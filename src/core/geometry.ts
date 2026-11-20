@@ -90,6 +90,30 @@ export function createPrimitiveGeometry(
       );
       break;
 
+    case 'custom': {
+      if (params.customGeometry && params.customGeometry.positions && params.customGeometry.positions.length >= 9) {
+        geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(params.customGeometry.positions), 3));
+        if (params.customGeometry.normals && params.customGeometry.normals.length === params.customGeometry.positions.length) {
+          geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(params.customGeometry.normals), 3));
+        } else {
+          geo.computeVertexNormals();
+        }
+        if (params.customGeometry.uvs && params.customGeometry.uvs.length > 0) {
+          geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(params.customGeometry.uvs), 2));
+        }
+        if (params.customGeometry.colors && params.customGeometry.colors.length > 0) {
+          geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(params.customGeometry.colors), 3));
+        }
+        if (params.customGeometry.indices && params.customGeometry.indices.length > 0) {
+          geo.setIndex(params.customGeometry.indices);
+        }
+      } else {
+        geo = new THREE.BoxGeometry(1, 1, 1);
+      }
+      break;
+    }
+
     default:
       geo = new THREE.BoxGeometry(1, 1, 1);
   }
@@ -123,11 +147,89 @@ export function applyModifiers(
       case 'subdivide':
         geo = applySubdivisionRefinement(geo, Math.min(3, Math.max(1, Math.round(mod.factor))));
         break;
+      case 'bark_furrow':
+        geo = applyBarkFurrow(geo, mod.factor);
+        break;
+      case 'taper':
+        geo = applyTaper(geo, mod.factor);
+        break;
     }
   }
 
   geo.computeVertexNormals();
   return geo;
+}
+
+/**
+ * Applies procedural organic bark furrow displacement along vertex normals.
+ * Uses cylindrical azimuth and longitudinal harmonics to create realistic fissures and ridges.
+ */
+export function applyBarkFurrow(
+  geometry: THREE.BufferGeometry,
+  factor: number
+): THREE.BufferGeometry {
+  const cloned = geometry.clone();
+  cloned.computeVertexNormals();
+
+  const posAttr = cloned.getAttribute('position') as THREE.BufferAttribute;
+  const normAttr = cloned.getAttribute('normal') as THREE.BufferAttribute;
+  if (!posAttr || !normAttr) return cloned;
+
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    const z = posAttr.getZ(i);
+
+    const nx = normAttr.getX(i);
+    const ny = normAttr.getY(i);
+    const nz = normAttr.getZ(i);
+
+    const theta = Math.atan2(z, x);
+    // Deep longitudinal furrows modulated by spiral twist and height frequency
+    const ridgeNoise =
+      Math.sin(theta * 14.0 + y * 2.5) * 0.45 +
+      Math.sin(theta * 28.0 - y * 4.2) * 0.25 +
+      Math.cos(y * 8.0 + theta * 6.0) * 0.15;
+
+    const disp = ridgeNoise * factor * 0.1;
+    posAttr.setXYZ(i, x + nx * disp, y + ny * disp * 0.2, z + nz * disp);
+  }
+
+  posAttr.needsUpdate = true;
+  cloned.computeVertexNormals();
+  return cloned;
+}
+
+/**
+ * Applies axial tapering deformation along Y-axis.
+ */
+export function applyTaper(
+  geometry: THREE.BufferGeometry,
+  taperRatio: number
+): THREE.BufferGeometry {
+  const cloned = geometry.clone();
+  const posAttr = cloned.getAttribute('position') as THREE.BufferAttribute;
+  if (!posAttr) return cloned;
+
+  cloned.computeBoundingBox();
+  const bbox = cloned.boundingBox || new THREE.Box3(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 1, 1));
+  const minY = bbox.min.y;
+  const height = Math.max(0.001, bbox.max.y - minY);
+
+  for (let i = 0; i < posAttr.count; i++) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    const z = posAttr.getZ(i);
+
+    const normalizedY = (y - minY) / height;
+    const scale = Math.max(0.01, 1.0 - normalizedY * taperRatio);
+
+    posAttr.setXYZ(i, x * scale, y, z * scale);
+  }
+
+  posAttr.needsUpdate = true;
+  cloned.computeVertexNormals();
+  return cloned;
 }
 
 /**

@@ -29,3 +29,7 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Generated 3D models & CLI test outputs
+polyforge-realistic-tree.*
+polyforge-output.*

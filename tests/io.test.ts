@@ -4,6 +4,7 @@ import {
   ProjectSaveData,
   exportSceneToOBJString,
   exportSceneToSTLString,
+  exportSceneToGLTFBuffer,
   buildThreeGroupFromItems,
 } from '../src/core/io';
 import { SceneItem, AnimationTrack, EnvironmentSettings } from '../src/types';
@@ -146,5 +147,35 @@ describe('Project IO and Serialization', () => {
     expect(stlString.toLowerCase()).toContain('solid');
     expect(stlString.toLowerCase()).toContain('facet');
     expect(stlString.length).toBeGreaterThan(100);
+  });
+
+  it('exports SceneItem array to binary GLTF (GLB) Buffer headlessly', async () => {
+    const testItems: SceneItem[] = [
+      {
+        id: 'box-glb',
+        name: 'GLB Box',
+        type: 'mesh',
+        primitiveType: 'box',
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        material: {
+          color: '#388bfd',
+          roughness: 0.35,
+          metalness: 0.2,
+          emissive: '#000000',
+          emissiveIntensity: 0,
+          transmission: 0,
+          opacity: 1,
+          transparent: false,
+          wireframe: false,
+          texturePreset: 'none',
+        },
+        visible: true,
+        locked: false,
+      },
+    ];
+
+    const result = await exportSceneToGLTFBuffer(testItems, true);
+    expect(result).toBeInstanceOf(ArrayBuffer);
+    expect((result as ArrayBuffer).byteLength).toBeGreaterThan(100);
   });
 });

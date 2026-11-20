@@ -100,6 +100,12 @@ npm run polyforge -- run-script ./my-script.js --scene ./base.json --out ./outpu
 # Export a scene to Wavefront OBJ or STL for 3D printing and game engines
 npm run polyforge -- export ./mech.json --format obj --out ./mech.obj
 npm run polyforge -- export ./mech.json --format stl --out ./mech.stl
+npm run polyforge -- export ./mech.json --format glb --out ./mech.glb
+
+# Generate an ultra-realistic high-poly botanical oak tree (Quercus robur)
+npm run polyforge -- generate-tree --format glb --out ./oak-tree.glb
+npm run polyforge -- generate-tree --format obj --out ./oak-tree.obj
+npm run polyforge -- generate-tree --format json --out ./oak-tree.json
 
 # Inspect an existing scene's objects, materials, and animation tracks
 npm run polyforge -- inspect ./system.json
@@ -124,9 +130,12 @@ npm run polyforge-mcp
 ## 🌟 Key Capabilities
 
 ### 1. 📐 Procedural 3D Modeling & Primitives
-- **Mesh Primitives**: Box, Sphere, Cylinder, Cone, Torus, Plane, Dodecahedron, and Capsule with parametric tessellation.
+- **Mesh Primitives**: Box, Sphere, Cylinder, Cone, Torus, Plane, Dodecahedron, Capsule, and Custom BufferGeometry with parametric tessellation.
+- **Botanical Procedural Engine**: Recursive phototropic branching with Leonardo da Vinci's rule of cross-sectional area conservation, continuous limb lofting along 3D splines, root buttresses, bark creasing, and volumetric 3D curved oak foliage clusters.
 - **Procedural Modifiers**:
   - `Noise Sculpting`: 3D procedural noise displacement along vertex normals for organic and terrain modeling.
+  - `Bark Furrowing`: Longitudinal cylindrical harmonic ridges and fissures for realistic organic tree bark.
+  - `Axial Taper`: Parametric tapering cross-section deformation along the vertical axis.
   - `Axial Twist`: Continuous angular twist deformation around the vertical axis.
   - `Face Subdivision`: Midpoint triangle refinement to increase polygonal density and geometric fidelity.
   - `Normal Smoothing`: Smooth normal recalculation.

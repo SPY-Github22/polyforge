@@ -1,5 +1,6 @@
 import {
   AnimationTrack,
+  CustomGeometryData,
   EnvironmentSettings,
   Keyframe,
   MaterialProperties,
@@ -8,6 +9,7 @@ import {
   TimelineState,
   TransformData,
 } from '../../types';
+import { BotanicalTreeOptions } from '../botany';
 
 export type ProceduralTemplateId =
   | 'sci-fi-citadel'
@@ -27,7 +29,7 @@ export interface CreateObjectOptions {
   scale?: [number, number, number];
   material?: Partial<MaterialProperties>;
   modifiers?: Array<{
-    type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+    type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth' | 'bark_furrow' | 'taper';
     factor: number;
     enabled?: boolean;
   }>;
@@ -41,6 +43,7 @@ export interface CreateObjectOptions {
     tubularSegments?: number;
     widthSegments?: number;
     heightSegments?: number;
+    customGeometry?: CustomGeometryData;
   };
 }
 
@@ -57,6 +60,18 @@ export interface UpdateObjectOptions {
 export interface PolyForgeScriptAPI {
   // Object creation & mutation
   createObject: (options: CreateObjectOptions) => SceneItem;
+  createTree: (options?: BotanicalTreeOptions) => SceneItem[];
+  createCustomMesh: (options: {
+    name?: string;
+    positions: number[];
+    normals?: number[];
+    uvs?: number[];
+    indices?: number[];
+    material?: Partial<MaterialProperties>;
+    position?: [number, number, number];
+    rotation?: [number, number, number];
+    scale?: [number, number, number];
+  }) => SceneItem;
   updateObject: (idOrName: string, updates: UpdateObjectOptions) => SceneItem | null;
   deleteObject: (idOrName: string) => boolean;
   getObject: (idOrName: string) => SceneItem | null;
@@ -65,7 +80,7 @@ export interface PolyForgeScriptAPI {
   addModifier: (
     idOrName: string,
     modifier: {
-      type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+      type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth' | 'bark_furrow' | 'taper';
       factor: number;
       enabled?: boolean;
     }

@@ -4,9 +4,10 @@ import path from 'path';
 import { PROCEDURAL_TEMPLATES, matchProceduralTemplate } from '../src/core/ai/procedural';
 import { ProceduralTemplateId } from '../src/core/ai/types';
 import { executePolyForgeScript } from '../src/core/ai/api';
-import { exportSceneToOBJString, exportSceneToSTLString, parseProjectFile } from '../src/core/io';
+import { exportSceneToOBJString, exportSceneToSTLString, exportSceneToGLTFBuffer, parseProjectFile } from '../src/core/io';
 import { PolyForgeMCPServer } from './polyforge-mcp';
 import { EnvironmentSettings, TimelineState } from '../src/types';
+import { generateBotanicalOakTree } from '../src/core/botany';
 
 const defaultEnv: EnvironmentSettings = {
   backgroundColor: '#0d1117',
@@ -41,6 +42,7 @@ Commands:
   generate --template <id> [--out <f>]                    Synthesize a 3D model from a template ID
   prompt "<natural language>" [--out <f>]                  Synthesize a 3D model matching a prompt
   run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
+  generate-tree [--out <f>] [--format <obj|stl|json>]     Synthesize an ultra-realistic high-poly botanical oak tree
   export <scene.json> --format <obj|stl|json> [--out <f>] Export a scene to 3D geometry formats
   inspect <scene.json>                                    Display detailed summary and metrics of a scene file
   mcp                                                     Launch the Model Context Protocol stdio server
@@ -114,6 +116,60 @@ async function main() {
       fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
       console.log(`[PolyForge Agent] Generated ${result.items.length} objects and ${result.tracks.length} animation tracks.`);
       console.log(`[PolyForge Agent] Saved project to: ${outPath}`);
+      break;
+    }
+
+    case 'generate-tree': {
+      console.log('[PolyForge Agent] Synthesizing realistic botanical oak tree...');
+      const seed = parseInt(getArgValue('--seed') || '2026', 10);
+      const leafCount = parseInt(getArgValue('--leaf-count') || '3600', 10);
+      const height = parseFloat(getArgValue('--height') || '9.2');
+
+      const tree = generateBotanicalOakTree({
+        seed,
+        leafCount,
+        trunkHeight: height,
+        radialSegments: 14,
+      });
+
+      console.log(`[PolyForge Agent] Tree generated: ${tree.stats.totalVertices} vertices, ${tree.stats.totalTriangles} triangles across 3 sub-meshes.`);
+      console.log(`  • Trunk (Wood - Bark): ${tree.stats.barkVertices} verts, ${tree.stats.barkTriangles} tris`);
+      console.log(`  • Canopy Foliage (Leaf Oak & Leaf Oak2): ${tree.stats.leafVertices} verts, ${tree.stats.leafTriangles} tris`);
+
+      const fmt = (getArgValue('--format', '-f') || 'json').toLowerCase();
+      const defaultName = `realistic-oak-tree.${fmt === 'json' ? 'json' : fmt}`;
+      const outPath = getArgValue('--out', '-o') || path.resolve(process.cwd(), defaultName);
+
+      if (fmt === 'obj') {
+        const objString = exportSceneToOBJString(tree.allItems);
+        fs.writeFileSync(outPath, objString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported tree OBJ to: ${outPath}`);
+      } else if (fmt === 'stl') {
+        const stlString = exportSceneToSTLString(tree.allItems);
+        fs.writeFileSync(outPath, stlString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported tree STL to: ${outPath}`);
+      } else if (fmt === 'glb') {
+        const glbBuffer = await exportSceneToGLTFBuffer(tree.allItems, true);
+        fs.writeFileSync(outPath, Buffer.from(glbBuffer as ArrayBuffer));
+        console.log(`[PolyForge Agent] Exported tree GLB (${(glbBuffer as ArrayBuffer).byteLength} bytes) to: ${outPath}`);
+      } else if (fmt === 'gltf') {
+        const gltfObj = await exportSceneToGLTFBuffer(tree.allItems, false);
+        fs.writeFileSync(outPath, JSON.stringify(gltfObj, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Exported tree glTF to: ${outPath}`);
+      } else {
+        const outputData = {
+          version: '1.0.0',
+          generator: 'PolyForge Botanical Engine (Quercus robur)',
+          createdAt: new Date().toISOString(),
+          environment: defaultEnv,
+          items: tree.allItems,
+          tracks: [],
+          timeline: defaultTimeline,
+          stats: tree.stats,
+        };
+        fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Saved project JSON to: ${outPath}`);
+      }
       break;
     }
 
@@ -232,8 +288,16 @@ async function main() {
       } else if (format === 'json') {
         fs.writeFileSync(outPath, JSON.stringify(sceneData, null, 2), 'utf-8');
         console.log(`[PolyForge Agent] Successfully exported JSON to: ${outPath}`);
+      } else if (format === 'glb') {
+        const glbBuf = await exportSceneToGLTFBuffer(sceneData.items, true);
+        fs.writeFileSync(outPath, Buffer.from(glbBuf as ArrayBuffer));
+        console.log(`[PolyForge Agent] Successfully exported GLB to: ${outPath}`);
+      } else if (format === 'gltf') {
+        const gltfObj = await exportSceneToGLTFBuffer(sceneData.items, false);
+        fs.writeFileSync(outPath, JSON.stringify(gltfObj, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Successfully exported glTF to: ${outPath}`);
       } else {
-        console.error(`Error: Unsupported export format: ${format}. Choose "obj", "stl", or "json".`);
+        console.error(`Error: Unsupported export format: ${format}. Choose "obj", "stl", "glb", or "json".`);
         process.exit(1);
       }
       break;

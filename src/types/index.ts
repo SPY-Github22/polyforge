@@ -12,9 +12,18 @@ export type PrimitiveType =
   | 'torus'
   | 'plane'
   | 'dodecahedron'
-  | 'capsule';
+  | 'capsule'
+  | 'custom';
 
-export type TexturePreset = 'none' | 'checker' | 'uv_grid' | 'stripes';
+export type TexturePreset = 'none' | 'checker' | 'uv_grid' | 'stripes' | 'bark' | 'foliage';
+
+export interface CustomGeometryData {
+  positions: number[];
+  normals?: number[];
+  uvs?: number[];
+  indices?: number[];
+  colors?: number[];
+}
 
 export interface MaterialProperties {
   color: string;
@@ -27,6 +36,8 @@ export interface MaterialProperties {
   transparent: boolean;
   wireframe: boolean;
   texturePreset: TexturePreset;
+  doubleSided?: boolean;
+  vertexColors?: boolean;
 }
 
 export interface TransformData {
@@ -46,11 +57,12 @@ export interface GeometryParameters {
   widthSegments?: number;
   heightSegments?: number;
   subdivisions?: number;
+  customGeometry?: CustomGeometryData;
 }
 
 export interface Modifier {
   id: string;
-  type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+  type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth' | 'bark_furrow' | 'taper';
   factor: number;
   enabled: boolean;
 }

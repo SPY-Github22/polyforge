@@ -88,6 +88,46 @@ export function exportSceneToSTLString(items: SceneItem[]): string {
   return typeof res === 'string' ? res : new TextDecoder().decode(res.buffer);
 }
 
+// Polyfill FileReader for headless Node.js environments when running GLTFExporter
+if (typeof globalThis !== 'undefined' && typeof (globalThis as any).FileReader === 'undefined') {
+  class HeadlessFileReader {
+    public result: ArrayBuffer | null = null;
+    public onloadend: (() => void) | null = null;
+    async readAsArrayBuffer(blob: Blob) {
+      try {
+        this.result = await blob.arrayBuffer();
+      } catch {
+        this.result = new ArrayBuffer(0);
+      }
+      if (this.onloadend) {
+        this.onloadend();
+      }
+    }
+  }
+  (globalThis as any).FileReader = HeadlessFileReader;
+}
+
+/**
+ * Headless export: converts SceneItem[] directly to a GLTF/GLB ArrayBuffer.
+ * Works headlessly in Node.js or browser without DOM requirement.
+ */
+export function exportSceneToGLTFBuffer(items: SceneItem[], binary: boolean = true): Promise<ArrayBuffer | object> {
+  return new Promise((resolve, reject) => {
+    const group = buildThreeGroupFromItems(items);
+    const exporter = new GLTFExporter();
+    exporter.parse(
+      group,
+      (result) => {
+        resolve(result);
+      },
+      (error) => {
+        reject(error);
+      },
+      { binary, embedImages: true }
+    );
+  });
+}
+
 /**
  * Triggers a client-side browser file download for a Blob.
  */

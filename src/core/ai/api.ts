@@ -17,6 +17,7 @@ import {
 } from './types';
 import { insertOrUpdateKeyframe } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
+import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -98,6 +99,45 @@ export function createPolyForgeScriptAPI(
       return newItem;
     },
 
+    createTree: (options?: BotanicalTreeOptions): SceneItem[] => {
+      const result = generateBotanicalOakTree(options);
+      for (const item of result.allItems) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      logs.push(`[Botany] Generated realistic oak tree: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris.`);
+      return result.allItems;
+    },
+
+    createCustomMesh: (options: {
+      name?: string;
+      positions: number[];
+      normals?: number[];
+      uvs?: number[];
+      indices?: number[];
+      material?: Partial<MaterialProperties>;
+      position?: [number, number, number];
+      rotation?: [number, number, number];
+      scale?: [number, number, number];
+    }): SceneItem => {
+      return api.createObject({
+        primitive: 'custom',
+        name: options.name || `Custom Mesh ${context.items.length + 1}`,
+        position: options.position || [0, 0, 0],
+        rotation: options.rotation || [0, 0, 0],
+        scale: options.scale || [1, 1, 1],
+        material: options.material,
+        geometryParams: {
+          customGeometry: {
+            positions: options.positions,
+            normals: options.normals,
+            uvs: options.uvs,
+            indices: options.indices,
+          },
+        },
+      });
+    },
+
     updateObject: (idOrName: string, updates: UpdateObjectOptions): SceneItem | null => {
       const idx = findItemIndex(idOrName);
       if (idx === -1) {
@@ -172,7 +212,7 @@ export function createPolyForgeScriptAPI(
     addModifier: (
       idOrName: string,
       modifier: {
-        type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth';
+        type: 'subdivide' | 'noise_displace' | 'twist' | 'smooth' | 'bark_furrow' | 'taper';
         factor: number;
         enabled?: boolean;
       }
