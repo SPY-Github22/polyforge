@@ -7,6 +7,7 @@ import { exportSceneToOBJString, exportSceneToSTLString, parseProjectFile } from
 import { ProceduralTemplateId } from '../src/core/ai/types';
 import { AnimationTrack, EnvironmentSettings, SceneItem, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
+import { generateRealisticBicycle } from '../src/core/bicycle';
 
 export interface MCPServerState {
   items: SceneItem[];
@@ -195,6 +196,19 @@ export const MCP_TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {},
+    },
+  },
+  {
+    name: 'polyforge_generate_bicycle',
+    description: 'Synthesize an ultra-realistic mechanically precise 3D road bicycle with diamond frame, drop handlebars, 32-spoke laced wheels, 11-speed drivetrain, continuous roller chain, disc brakes, and routed control cables',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        frameColor: { type: 'string', description: 'Frame paint hex color (e.g. "#c01525")' },
+        frameMaterial: { type: 'string', enum: ['gloss', 'matte', 'carbon'], description: 'Frame finish preset' },
+        spokeCount: { type: 'number', description: 'Number of spokes per wheel (default 32)' },
+        clearScene: { type: 'boolean', description: 'Whether to clear existing scene objects first (default: true)' },
+      },
     },
   },
 ];
@@ -543,6 +557,26 @@ export class PolyForgeMCPServer {
           };
         }
         throw new Error(`Unsupported export format: "${format}". Choose: obj, stl, or json.`);
+      }
+
+      case 'polyforge_generate_bicycle': {
+        if (args.clearScene !== false) {
+          this.state.items = [];
+          this.state.tracks = [];
+        }
+
+        const bike = generateRealisticBicycle({
+          frameColor: args.frameColor,
+          frameMaterial: args.frameMaterial,
+          spokeCount: args.spokeCount,
+        });
+
+        this.state.items.push(...bike.allItems);
+        return {
+          message: 'Successfully synthesized realistic mechanical bicycle.',
+          stats: bike.stats,
+          components: bike.allItems.map((i) => ({ id: i.id, name: i.name })),
+        };
       }
 
       case 'polyforge_get_api_docs': {

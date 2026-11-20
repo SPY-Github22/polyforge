@@ -9,6 +9,7 @@ import {
   ProceduralTemplate,
   ProceduralTemplateId,
 } from './types';
+import { generateRealisticBicycle } from '../bicycle';
 
 // Helper to create a unique ID
 function makeId(prefix: string): string {
@@ -1157,6 +1158,38 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
     tags: ['architecture', 'spiral', 'stairs', 'pavilion', 'classical', 'parametric'],
     generate: generateSpiralPavilion,
   },
+  'realistic-bicycle': {
+    id: 'realistic-bicycle',
+    name: 'Realistic Road Bicycle',
+    category: 'Mechanical',
+    description: 'Mechanically precise road bicycle with diamond frame, drop handlebars, 32-spoke laced wheels, 11-speed drivetrain, continuous roller chain, disc brakes, and routed control cables.',
+    tags: ['bicycle', 'bike', 'cycle', 'road-bike', 'vehicle', 'mechanical', 'drivetrain'],
+    generate: () => {
+      const result = generateRealisticBicycle();
+      return {
+        description: 'Ultra-realistic mechanically precise 3D road bicycle with diamond frame, drop handlebars, laced wheels, 11-speed drivetrain, continuous roller chain, disc brakes, and routed control cables.',
+        items: result.allItems,
+        tracks: [],
+        timeline: {
+          currentFrame: 0,
+          totalFrames: 120,
+          fps: 30,
+          isPlaying: false,
+          isLooping: true,
+          autoKeying: false,
+        },
+        environment: {
+          backgroundColor: '#0f172a',
+          ambientIntensity: 0.7,
+          directionalIntensity: 1.4,
+          showGrid: true,
+          showAxes: true,
+          shadows: true,
+          preset: 'studio',
+        },
+      };
+    },
+  },
 };
 
 /**
@@ -1165,6 +1198,9 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
 export function matchProceduralTemplate(query: string): ProceduralTemplate {
   const q = query.toLowerCase();
 
+  if (q.includes('bike') || q.includes('bicycle') || q.includes('cycle') || q.includes('cycling') || q.includes('drivetrain')) {
+    return PROCEDURAL_TEMPLATES['realistic-bicycle'];
+  }
   if (q.includes('solar') || q.includes('planet') || q.includes('space') || q.includes('orrery') || q.includes('sun')) {
     return PROCEDURAL_TEMPLATES['solar-orrery'];
   }

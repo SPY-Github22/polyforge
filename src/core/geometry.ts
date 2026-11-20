@@ -401,3 +401,240 @@ export function calculateGeometryStats(geometry: THREE.BufferGeometry): { vertic
     triangles: Math.round(triangles),
   };
 }
+
+export interface SweptTubeOptions {
+  points: THREE.Vector3[];
+  radius?: number | ((progress: number) => number);
+  radialSegments?: number;
+  closed?: boolean;
+  capStart?: boolean;
+  capEnd?: boolean;
+}
+
+/**
+ * Sweeps a circular or variable-radius tube along an arbitrary 3D curve using
+ * rotation-minimizing Bishop frames, with smooth normals, UV mapping, and end caps.
+ */
+export function createSweptTubeGeometry(options: SweptTubeOptions): THREE.BufferGeometry {
+  const points = options.points;
+  if (!points || points.length < 2) {
+    return new THREE.BufferGeometry();
+  }
+
+  const radialSegments = Math.max(3, options.radialSegments ?? 12);
+  const closed = !!options.closed;
+  const capStart = options.capStart ?? !closed;
+  const capEnd = options.capEnd ?? !closed;
+  const radiusFn = typeof options.radius === 'function'
+    ? options.radius
+    : () => (typeof options.radius === 'number' ? options.radius : 0.05);
+
+  const numRings = points.length;
+  const tangents: THREE.Vector3[] = [];
+  for (let i = 0; i < numRings; i++) {
+    let t: THREE.Vector3;
+    if (i === 0) {
+      t = closed
+        ? new THREE.Vector3().subVectors(points[1], points[numRings - 1]).normalize()
+        : new THREE.Vector3().subVectors(points[1], points[0]).normalize();
+    } else if (i === numRings - 1) {
+      t = closed
+        ? new THREE.Vector3().subVectors(points[0], points[numRings - 2]).normalize()
+        : new THREE.Vector3().subVectors(points[numRings - 1], points[numRings - 2]).normalize();
+    } else {
+      t = new THREE.Vector3().subVectors(points[i + 1], points[i - 1]).normalize();
+    }
+    if (t.lengthSq() < 0.0001) t.set(0, 1, 0);
+    tangents.push(t);
+  }
+
+  const normals: THREE.Vector3[] = [];
+  const binormals: THREE.Vector3[] = [];
+
+  let n0 = new THREE.Vector3(0, 1, 0).cross(tangents[0]);
+  if (n0.lengthSq() < 0.001) {
+    n0 = new THREE.Vector3(0, 0, 1).cross(tangents[0]);
+  }
+  n0.normalize();
+  normals.push(n0);
+  binormals.push(new THREE.Vector3().crossVectors(tangents[0], n0).normalize());
+
+  for (let i = 1; i < numRings; i++) {
+    const prevN = normals[i - 1];
+    const prevT = tangents[i - 1];
+    const curT = tangents[i];
+
+    const axis = new THREE.Vector3().crossVectors(prevT, curT);
+    const curN = prevN.clone();
+    if (axis.lengthSq() > 0.0001) {
+      axis.normalize();
+      const dot = Math.max(-1, Math.min(1, prevT.dot(curT)));
+      const angle = Math.acos(dot);
+      curN.applyAxisAngle(axis, angle);
+    }
+    curN.sub(new THREE.Vector3().copy(curT).multiplyScalar(curN.dot(curT))).normalize();
+    normals.push(curN);
+    binormals.push(new THREE.Vector3().crossVectors(curT, curN).normalize());
+  }
+
+  const positions: number[] = [];
+  const vertexNormals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i < numRings; i++) {
+    const pt = points[i];
+    const n = normals[i];
+    const b = binormals[i];
+    const progress = i / (numRings - 1);
+    const rad = Math.max(0.0001, radiusFn(progress));
+
+    for (let j = 0; j <= radialSegments; j++) {
+      const angle = (j / radialSegments) * Math.PI * 2;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+
+      const nx = n.x * cosA + b.x * sinA;
+      const ny = n.y * cosA + b.y * sinA;
+      const nz = n.z * cosA + b.z * sinA;
+
+      positions.push(pt.x + nx * rad, pt.y + ny * rad, pt.z + nz * rad);
+      vertexNormals.push(nx, ny, nz);
+      uvs.push(j / radialSegments, progress);
+    }
+  }
+
+  const stride = radialSegments + 1;
+  const ringCount = closed ? numRings : numRings - 1;
+  for (let i = 0; i < ringCount; i++) {
+    const nextRing = (i + 1) % numRings;
+    for (let j = 0; j < radialSegments; j++) {
+      const a = i * stride + j;
+      const b = nextRing * stride + j;
+      const c = nextRing * stride + (j + 1);
+      const d = i * stride + (j + 1);
+
+      indices.push(a, b, d);
+      indices.push(b, c, d);
+    }
+  }
+
+  if (capStart && !closed) {
+    const centerIdx = positions.length / 3;
+    const pt = points[0];
+    const tan = tangents[0];
+    positions.push(pt.x, pt.y, pt.z);
+    vertexNormals.push(-tan.x, -tan.y, -tan.z);
+    uvs.push(0.5, 0.5);
+
+    for (let j = 0; j < radialSegments; j++) {
+      indices.push(centerIdx, j + 1, j);
+    }
+  }
+
+  if (capEnd && !closed) {
+    const centerIdx = positions.length / 3;
+    const pt = points[numRings - 1];
+    const tan = tangents[numRings - 1];
+    positions.push(pt.x, pt.y, pt.z);
+    vertexNormals.push(tan.x, tan.y, tan.z);
+    uvs.push(0.5, 0.5);
+
+    const lastRingStart = (numRings - 1) * stride;
+    for (let j = 0; j < radialSegments; j++) {
+      indices.push(centerIdx, lastRingStart + j, lastRingStart + j + 1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(vertexNormals), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+  geo.setIndex(indices);
+  return geo;
+}
+
+export interface GearSprocketOptions {
+  toothCount: number;
+  pitchRadius: number;
+  toothHeight?: number;
+  thickness?: number;
+  boreRadius?: number;
+}
+
+/**
+ * Procedurally generates an involute/trapezoidal mechanical cog wheel with chamfered teeth and center bore.
+ */
+export function createGearSprocketGeometry(options: GearSprocketOptions): THREE.BufferGeometry {
+  const toothCount = Math.max(6, options.toothCount);
+  const pitchRadius = Math.max(0.01, options.pitchRadius);
+  const toothHeight = options.toothHeight ?? pitchRadius * 0.15;
+  const thickness = options.thickness ?? 0.003;
+  const boreRadius = options.boreRadius ?? pitchRadius * 0.35;
+
+  const shape = new THREE.Shape();
+  const rootRadius = pitchRadius - toothHeight * 0.5;
+  const tipRadius = pitchRadius + toothHeight * 0.5;
+  const totalSteps = toothCount * 4;
+
+  for (let i = 0; i <= totalSteps; i++) {
+    const toothIdx = Math.floor(i / 4);
+    const subStep = i % 4;
+    const baseAngle = (toothIdx / toothCount) * Math.PI * 2;
+    const stepAngle = (1 / (toothCount * 4)) * Math.PI * 2;
+    const angle = baseAngle + subStep * stepAngle;
+
+    let r: number;
+    switch (subStep) {
+      case 0:
+        r = rootRadius;
+        break;
+      case 1:
+        r = tipRadius;
+        break;
+      case 2:
+        r = tipRadius;
+        break;
+      case 3:
+      default:
+        r = rootRadius;
+        break;
+    }
+
+    const x = Math.cos(angle) * r;
+    const y = Math.sin(angle) * r;
+
+    if (i === 0) {
+      shape.moveTo(x, y);
+    } else {
+      shape.lineTo(x, y);
+    }
+  }
+
+  if (boreRadius > 0.001) {
+    const holePath = new THREE.Path();
+    const holeSteps = 24;
+    for (let i = 0; i <= holeSteps; i++) {
+      const a = (i / holeSteps) * Math.PI * 2;
+      const hx = Math.cos(a) * boreRadius;
+      const hy = Math.sin(a) * boreRadius;
+      if (i === 0) holePath.moveTo(hx, hy);
+      else holePath.lineTo(hx, hy);
+    }
+    shape.holes.push(holePath);
+  }
+
+  const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+    depth: thickness,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    steps: 1,
+    bevelSize: Math.min(thickness * 0.25, 0.0015),
+    bevelThickness: Math.min(thickness * 0.25, 0.0015),
+  };
+
+  const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  geo.center();
+  geo.computeVertexNormals();
+  return geo;
+}

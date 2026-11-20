@@ -24,7 +24,12 @@ export type TexturePreset =
   | 'foliage'
   | 'bark_oak'
   | 'leaf_oak_mature'
-  | 'leaf_oak_young';
+  | 'leaf_oak_young'
+  | 'carbon_fiber'
+  | 'tire_tread'
+  | 'brushed_metal'
+  | 'leather_perforated'
+  | 'reflector_amber';
 
 export interface CustomGeometryData {
   positions: number[];

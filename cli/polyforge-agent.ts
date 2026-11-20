@@ -8,6 +8,7 @@ import { exportSceneToOBJString, exportSceneToSTLString, exportSceneToGLTFBuffer
 import { PolyForgeMCPServer } from './polyforge-mcp';
 import { EnvironmentSettings, TimelineState } from '../src/types';
 import { generateBotanicalOakTree } from '../src/core/botany';
+import { generateRealisticBicycle } from '../src/core/bicycle';
 
 const defaultEnv: EnvironmentSettings = {
   backgroundColor: '#0d1117',
@@ -42,8 +43,9 @@ Commands:
   generate --template <id> [--out <f>]                    Synthesize a 3D model from a template ID
   prompt "<natural language>" [--out <f>]                  Synthesize a 3D model matching a prompt
   run-script <script.js> [--scene <scene.json>] [--out <f>] Execute a PolyForge script in sandbox
-  generate-tree [--out <f>] [--format <obj|stl|json>]     Synthesize an ultra-realistic high-poly botanical oak tree
-  export <scene.json> --format <obj|stl|json> [--out <f>] Export a scene to 3D geometry formats
+  generate-tree [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic high-poly botanical oak tree
+  generate-bicycle [--out <f>] [--format <obj|stl|glb|json>] Synthesize an ultra-realistic mechanically precise bicycle
+  export <scene.json> --format <obj|stl|glb|json> [--out <f>] Export a scene to 3D geometry formats
   inspect <scene.json>                                    Display detailed summary and metrics of a scene file
   mcp                                                     Launch the Model Context Protocol stdio server
 
@@ -168,6 +170,66 @@ async function main() {
           tracks: [],
           timeline: defaultTimeline,
           stats: tree.stats,
+        };
+        fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Saved project JSON to: ${outPath}`);
+      }
+      break;
+    }
+
+    case 'generate-bicycle': {
+      console.log('[PolyForge Agent] Synthesizing ultra-realistic mechanically precise bicycle...');
+      const frameColor = getArgValue('--frame-color') || '#c01525';
+      const frameMaterial = (getArgValue('--frame-material') || 'gloss') as 'gloss' | 'matte' | 'carbon';
+      const spokeCount = parseInt(getArgValue('--spokes') || '32', 10);
+
+      const bike = generateRealisticBicycle({
+        frameColor,
+        frameMaterial,
+        spokeCount,
+      });
+
+      console.log(`[PolyForge Agent] Bicycle generated: ${bike.stats.totalVertices} vertices, ${bike.stats.totalTriangles} triangles across ${bike.stats.componentsCount} sub-assemblies.`);
+      console.log(`  • Frame: ${bike.stats.frameVertices} verts, ${bike.stats.frameTriangles} tris`);
+      console.log(`  • Cockpit & Fork: ${bike.stats.forkCockpitVertices} verts, ${bike.stats.forkCockpitTriangles} tris`);
+      console.log(`  • Wheels & Rotors: ${bike.stats.wheelsVertices} verts, ${bike.stats.wheelsTriangles} tris`);
+      console.log(`  • Drivetrain & Chain: ${bike.stats.drivetrainVertices} verts, ${bike.stats.drivetrainTriangles} tris`);
+      console.log(`  • Saddle & Seatpost: ${bike.stats.saddleSeatpostVertices} verts, ${bike.stats.saddleSeatpostTriangles} tris`);
+      console.log(`  • Cables & Reflectors: ${bike.stats.accessoriesVertices} verts, ${bike.stats.accessoriesTriangles} tris`);
+
+      const fmt = (getArgValue('--format', '-f') || 'json').toLowerCase();
+      const defaultName = `realistic-bicycle.${fmt === 'json' ? 'json' : fmt}`;
+      const outPath = getArgValue('--out', '-o') || path.resolve(process.cwd(), defaultName);
+
+      if (fmt === 'obj') {
+        const objString = exportSceneToOBJString(bike.allItems);
+        fs.writeFileSync(outPath, objString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported bicycle OBJ to: ${outPath}`);
+      } else if (fmt === 'stl') {
+        const stlString = exportSceneToSTLString(bike.allItems);
+        fs.writeFileSync(outPath, stlString, 'utf-8');
+        console.log(`[PolyForge Agent] Exported bicycle STL to: ${outPath}`);
+      } else if (fmt === 'glb') {
+        const glbBuffer = await exportSceneToGLTFBuffer(bike.allItems, true);
+        fs.writeFileSync(outPath, Buffer.from(glbBuffer as ArrayBuffer));
+        console.log(`[PolyForge Agent] Exported bicycle GLB (${(glbBuffer as ArrayBuffer).byteLength} bytes) to: ${outPath}`);
+      } else if (fmt === 'gltf') {
+        const gltfObj = await exportSceneToGLTFBuffer(bike.allItems, false);
+        fs.writeFileSync(outPath, JSON.stringify(gltfObj, null, 2), 'utf-8');
+        console.log(`[PolyForge Agent] Exported bicycle glTF to: ${outPath}`);
+      } else {
+        const outputData = {
+          version: '1.0.0',
+          generator: 'PolyForge Mechanical Engine (Bicycle)',
+          createdAt: new Date().toISOString(),
+          environment: {
+            ...defaultEnv,
+            preset: 'studio' as const,
+          },
+          items: bike.allItems,
+          tracks: [],
+          timeline: defaultTimeline,
+          stats: bike.stats,
         };
         fs.writeFileSync(outPath, JSON.stringify(outputData, null, 2), 'utf-8');
         console.log(`[PolyForge Agent] Saved project JSON to: ${outPath}`);

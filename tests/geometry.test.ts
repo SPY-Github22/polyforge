@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import {
   createPrimitiveGeometry,
   applyModifiers,
@@ -6,6 +7,8 @@ import {
   applyTwist,
   applySubdivisionRefinement,
   calculateGeometryStats,
+  createSweptTubeGeometry,
+  createGearSprocketGeometry,
 } from '../src/core/geometry';
 import { PrimitiveType } from '../src/types';
 
@@ -169,5 +172,45 @@ describe('Geometry Engine', () => {
       }
     }
     expect(changed).toBe(true);
+  });
+
+  it('generates swept tube geometry along a 3D spline with end caps', () => {
+    const points = [
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(1, 2, 0),
+      new THREE.Vector3(2, 2, 0),
+    ];
+    const tubeGeo = createSweptTubeGeometry({
+      points,
+      radius: (t) => 0.05 * (1 - 0.3 * t),
+      radialSegments: 10,
+      capStart: true,
+      capEnd: true,
+    });
+
+    expect(tubeGeo).toBeDefined();
+    expect(tubeGeo.getAttribute('position')).toBeDefined();
+    expect(tubeGeo.getAttribute('normal')).toBeDefined();
+    expect(tubeGeo.getAttribute('uv')).toBeDefined();
+    expect(tubeGeo.index).toBeDefined();
+    expect(tubeGeo.getAttribute('position').count).toBeGreaterThan(40);
+    expect(tubeGeo.index!.count).toBeGreaterThan(60);
+  });
+
+  it('generates mechanical gear sprocket geometry with teeth and center bore', () => {
+    const sprocketGeo = createGearSprocketGeometry({
+      toothCount: 16,
+      pitchRadius: 0.08,
+      toothHeight: 0.012,
+      thickness: 0.003,
+      boreRadius: 0.02,
+    });
+
+    expect(sprocketGeo).toBeDefined();
+    expect(sprocketGeo.getAttribute('position')).toBeDefined();
+    expect(sprocketGeo.getAttribute('normal')).toBeDefined();
+    expect(sprocketGeo.getAttribute('position').count).toBeGreaterThan(50);
+    expect(sprocketGeo.index ? sprocketGeo.index.count : sprocketGeo.getAttribute('position').count).toBeGreaterThan(50);
   });
 });

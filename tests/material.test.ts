@@ -76,4 +76,17 @@ describe('Material System', () => {
     expect(mat.map).not.toBeNull();
     expect(mat.vertexColors).toBe(true);
   });
+
+  it('generates photorealistic procedural mechanical textures', () => {
+    const mechanicalPresets = ['carbon_fiber', 'tire_tread', 'brushed_metal', 'leather_perforated', 'reflector_amber'] as const;
+    for (const preset of mechanicalPresets) {
+      const tex = getProceduralTexture(preset);
+      expect(tex).not.toBeNull();
+      expect(tex).toBeInstanceOf(THREE.DataTexture);
+      const dataTex = tex as THREE.DataTexture;
+      expect(dataTex.image.width).toBeGreaterThanOrEqual(256);
+      expect(dataTex.image.height).toBeGreaterThanOrEqual(256);
+      expect(dataTex.image.data.length).toBe(dataTex.image.width * dataTex.image.height * 4);
+    }
+  });
 });

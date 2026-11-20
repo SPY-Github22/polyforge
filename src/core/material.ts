@@ -253,7 +253,240 @@ function createFoliageDataTexture(variant: 'mature' | 'young'): THREE.DataTextur
 }
 
 /**
- * Procedurally generates 2D textures (Checkerboard, UV Grid, Stripes, Oak Bark, Oak Foliage)
+ * Creates photorealistic 2x2 twill weave carbon fiber DataTexture (256x256).
+ * Features orthogonal yarn tows with arched specular highlights and bundle crevices.
+ */
+function createCarbonFiberTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const cellSize = 32;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const cellX = Math.floor(x / cellSize);
+      const cellY = Math.floor(y / cellSize);
+      const inCellX = (x % cellSize) / cellSize;
+      const inCellY = (y % cellSize) / cellSize;
+
+      const isHorizontalTow = ((cellX + cellY) % 2 === 0);
+
+      let brightness: number;
+      if (isHorizontalTow) {
+        const arch = Math.sin(inCellY * Math.PI);
+        const micro = 0.85 + 0.15 * Math.sin(y * 4.0);
+        brightness = (45 + arch * 40) * micro;
+      } else {
+        const arch = Math.sin(inCellX * Math.PI);
+        const micro = 0.85 + 0.15 * Math.sin(x * 4.0);
+        brightness = (30 + arch * 35) * micro;
+      }
+
+      const isCrease = inCellX < 0.04 || inCellX > 0.96 || inCellY < 0.04 || inCellY > 0.96;
+      if (isCrease) brightness *= 0.6;
+
+      const val = Math.max(10, Math.min(255, Math.floor(brightness)));
+      data[idx] = val;
+      data[idx + 1] = Math.floor(val * 1.02);
+      data[idx + 2] = Math.floor(val * 1.06);
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates realistic vulcanized rubber bicycle tire tread DataTexture (512x512).
+ * Features smooth rolling center strip, directional herringbone sipes, and bead groove.
+ */
+function createTireTreadTexture(): THREE.DataTexture {
+  const width = 512;
+  const height = 512;
+  const data = new Uint8Array(width * height * 4);
+
+  for (let y = 0; y < height; y++) {
+    const v = y / height;
+    for (let x = 0; x < width; x++) {
+      const u = x / width;
+      const idx = (y * width + x) * 4;
+
+      const distFromCenter = Math.abs(u - 0.5);
+
+      let baseTone = 38;
+      let isGroove = false;
+
+      if (distFromCenter < 0.12) {
+        const micro = Math.sin(x * 0.8) * Math.cos(y * 0.8) * 3;
+        baseTone += micro;
+      } else if (distFromCenter < 0.38) {
+        const sipeFrequency = 24.0;
+        const sipeAngle = (u > 0.5 ? 1 : -1) * (distFromCenter - 0.12) * 6.0;
+        const sipePhase = Math.sin((v * sipeFrequency + sipeAngle) * Math.PI * 2);
+
+        if (sipePhase > 0.72) {
+          isGroove = true;
+        } else {
+          const pebble = Math.sin(x * 0.9) * Math.cos(y * 0.9);
+          baseTone += pebble * 6;
+        }
+      } else {
+        const isBeadLine = Math.abs(distFromCenter - 0.46) < 0.015;
+        if (isBeadLine) {
+          baseTone = 20;
+        } else {
+          baseTone = 32;
+        }
+      }
+
+      if (isGroove) {
+        baseTone = 14;
+      }
+
+      const val = Math.max(10, Math.min(255, Math.floor(baseTone)));
+      data[idx] = val;
+      data[idx + 1] = val;
+      data[idx + 2] = val;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 4);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates high-frequency anisotropic brushed metal DataTexture (256x256).
+ * Simulates CNC-lathed and brushed aluminum/titanium bicycle components.
+ */
+function createBrushedMetalTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+
+  const streakNoise: number[] = new Array(width);
+  for (let x = 0; x < width; x++) {
+    streakNoise[x] =
+      Math.sin(x * 0.45) * 0.35 +
+      Math.sin(x * 1.83) * 0.25 +
+      Math.sin(x * 5.71) * 0.20 +
+      Math.sin(x * 17.3) * 0.20;
+  }
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const microY = Math.sin(y * 0.1) * 0.08;
+      const val = Math.max(160, Math.min(245, Math.floor(200 + (streakNoise[x] + microY) * 45)));
+
+      data[idx] = val;
+      data[idx + 1] = Math.floor(val * 0.99);
+      data[idx + 2] = Math.floor(val * 1.01);
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 1);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates micro-perforated saddle leather DataTexture (256x256).
+ * Features staggered breathable perforation holes with beveled edges.
+ */
+function createLeatherPerforatedTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const holeSpacing = 16;
+  const holeRadiusSq = 3.2 * 3.2;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+
+      const row = Math.floor(y / holeSpacing);
+      const xOffset = (row % 2 === 1) ? holeSpacing / 2 : 0;
+      const localX = (x + xOffset) % holeSpacing - holeSpacing / 2;
+      const localY = (y % holeSpacing) - holeSpacing / 2;
+      const distSq = localX * localX + localY * localY;
+
+      let tone = 36;
+      const grain = Math.sin(x * 0.6) * Math.cos(y * 0.6) * 5;
+      tone += grain;
+
+      if (distSq < holeRadiusSq) {
+        tone = 10;
+      } else if (distSq < holeRadiusSq * 1.8) {
+        tone += 16;
+      }
+
+      const val = Math.max(0, Math.min(255, Math.floor(tone)));
+      data[idx] = val;
+      data[idx + 1] = val;
+      data[idx + 2] = val;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(6, 6);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Creates micro-prismatic amber retroreflector DataTexture (256x256).
+ * Features corner-cube reflective facets for pedals and safety reflectors.
+ */
+function createReflectorTexture(): THREE.DataTexture {
+  const width = 256;
+  const height = 256;
+  const data = new Uint8Array(width * height * 4);
+  const cellSize = 16;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const cellX = (x % cellSize) / cellSize - 0.5;
+      const cellY = (y % cellSize) / cellSize - 0.5;
+
+      const facet = Math.abs(cellX) + Math.abs(cellY);
+      const highlight = Math.max(0, 1.0 - facet * 1.6);
+
+      data[idx] = Math.min(255, Math.floor(230 + highlight * 25));
+      data[idx + 1] = Math.min(255, Math.floor(130 + highlight * 75));
+      data[idx + 2] = Math.min(255, Math.floor(15 + highlight * 45));
+      data[idx + 3] = 255;
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Procedurally generates 2D textures (Checkerboard, UV Grid, Stripes, Oak Bark, Oak Foliage, Carbon Fiber, Tire Tread, Brushed Metal, Perforated Leather, Reflector)
  * Operates purely in memory using Three.js DataTexture; works identically in browser and Node.js CLI.
  */
 export function getProceduralTexture(type: TexturePreset): THREE.Texture | null {
@@ -281,6 +514,21 @@ export function getProceduralTexture(type: TexturePreset): THREE.Texture | null 
       break;
     case 'leaf_oak_young':
       tex = createFoliageDataTexture('young');
+      break;
+    case 'carbon_fiber':
+      tex = createCarbonFiberTexture();
+      break;
+    case 'tire_tread':
+      tex = createTireTreadTexture();
+      break;
+    case 'brushed_metal':
+      tex = createBrushedMetalTexture();
+      break;
+    case 'leather_perforated':
+      tex = createLeatherPerforatedTexture();
+      break;
+    case 'reflector_amber':
+      tex = createReflectorTexture();
       break;
     default:
       return null;

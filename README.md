@@ -107,6 +107,11 @@ npm run polyforge -- generate-tree --format glb --out ./oak-tree.glb
 npm run polyforge -- generate-tree --format obj --out ./oak-tree.obj
 npm run polyforge -- generate-tree --format json --out ./oak-tree.json
 
+# Generate an ultra-realistic mechanically precise road bicycle (ISO 4210)
+npm run polyforge -- generate-bicycle --format glb --out ./bicycle.glb
+npm run polyforge -- generate-bicycle --format obj --out ./bicycle.obj
+npm run polyforge -- generate-bicycle --format json --out ./bicycle.json
+
 # Inspect an existing scene's objects, materials, and animation tracks
 npm run polyforge -- inspect ./system.json
 
@@ -124,6 +129,7 @@ npm run polyforge-mcp
 | `dna-helix` | Double-Helix DNA | Kinetics | 24 paired nucleotide rungs twisting along a parametric helix with continuous rotation |
 | `procedural-biome`| Low-Poly Pine Forest | Nature | Undulating terrain grid, stylized multi-tiered pine trees with wind sway, and monoliths |
 | `spiral-pavilion` | Parametric Spiral Pavilion | Architecture | Helical marble staircase, golden cupola dome, and ascending kinetic platform |
+| `realistic-bicycle` | Realistic Road Bicycle | Mechanical | Diamond frame, drop handlebars, 32-spoke laced wheels, 11-speed drivetrain, roller chain, disc brakes, and cables |
 
 ---
 
@@ -132,6 +138,9 @@ npm run polyforge-mcp
 ### 1. 📐 Procedural 3D Modeling & Primitives
 - **Mesh Primitives**: Box, Sphere, Cylinder, Cone, Torus, Plane, Dodecahedron, Capsule, and Custom BufferGeometry with parametric tessellation.
 - **Botanical Procedural Engine**: Recursive phototropic branching with Leonardo da Vinci's rule of cross-sectional area conservation, continuous limb lofting along 3D splines, root buttresses, bark creasing, and volumetric 3D curved oak foliage clusters.
+- **Mechanical & Vehicle Engine**: ISO 4210 road bicycle procedural synthesis with hydroformed diamond frame, aero fork, cockpit with dual STI brake levers, 32-spoke laced wheels with 45mm aero rims, 11-speed drivetrain, continuous roller chain links, and routed control cables.
+- **Parametric Geometric Generators**: Swept tube extrusion with rotation-minimizing Bishop frames (`createSweptTubeGeometry`), involute/trapezoidal gear sprockets with chamfered teeth and center bores (`createGearSprocketGeometry`).
+- **Procedural PBR Textures**: Pure headless memory DataTextures for `carbon_fiber` (2x2 twill weave), `tire_tread` (directional herringbone sipes and center rolling band), `brushed_metal` (anisotropic CNC micro-streaks), `leather_perforated` (staggered perforated racing saddle leather), and `reflector_amber` (retroreflective corner-cube facets).
 - **Procedural Modifiers**:
   - `Noise Sculpting`: 3D procedural noise displacement along vertex normals for organic and terrain modeling.
   - `Bark Furrowing`: Longitudinal cylindrical harmonic ridges and fissures for realistic organic tree bark.

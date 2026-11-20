@@ -18,6 +18,7 @@ import {
 import { insertOrUpdateKeyframe } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
 import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
+import { BicycleOptions, generateRealisticBicycle } from '../bicycle';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -106,6 +107,16 @@ export function createPolyForgeScriptAPI(
         createdItems.push(item);
       }
       logs.push(`[Botany] Generated realistic oak tree: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris.`);
+      return result.allItems;
+    },
+
+    createBicycle: (options?: BicycleOptions): SceneItem[] => {
+      const result = generateRealisticBicycle(options);
+      for (const item of result.allItems) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      logs.push(`[Mechanical] Generated realistic bicycle: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris across ${result.allItems.length} sub-assemblies.`);
       return result.allItems;
     },
 

@@ -190,7 +190,26 @@ describe('AI Scripting Engine & API', () => {
     expect(res.success).toBe(true);
     expect(res.items.length).toBeGreaterThan(5);
     expect(res.tracks.length).toBeGreaterThan(0);
-    expect(res.logs.some((l) => l.includes('Found templates: 7'))).toBe(true);
+    expect(res.logs.some((l) => l.includes('Found templates: 8'))).toBe(true);
+  });
+
+  it('generates mechanical bicycle directly via polyforge.createBicycle() in sandbox', async () => {
+    const ctx = createTestContext();
+    const script = `
+      polyforge.clearScene();
+      const bikeItems = polyforge.createBicycle({
+        frameColor: '#c01525',
+        frameMaterial: 'gloss',
+        spokeCount: 32,
+      });
+      polyforge.log('Bike sub-assemblies: ' + bikeItems.length);
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBe(6);
+    expect(res.logs.some((l) => l.includes('Bike sub-assemblies: 6'))).toBe(true);
+    expect(res.items[0].name).toContain('Diamond Road Frame');
   });
 
   it('captures standard console.log output into execution logs', async () => {

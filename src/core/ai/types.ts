@@ -10,6 +10,7 @@ import {
   TransformData,
 } from '../../types';
 import { BotanicalTreeOptions } from '../botany';
+import { BicycleOptions } from '../bicycle';
 
 export type ProceduralTemplateId =
   | 'sci-fi-citadel'
@@ -18,7 +19,8 @@ export type ProceduralTemplateId =
   | 'kinetic-mech'
   | 'dna-helix'
   | 'procedural-biome'
-  | 'spiral-pavilion';
+  | 'spiral-pavilion'
+  | 'realistic-bicycle';
 
 export interface CreateObjectOptions {
   id?: string;
@@ -61,6 +63,7 @@ export interface PolyForgeScriptAPI {
   // Object creation & mutation
   createObject: (options: CreateObjectOptions) => SceneItem;
   createTree: (options?: BotanicalTreeOptions) => SceneItem[];
+  createBicycle: (options?: BicycleOptions) => SceneItem[];
   createCustomMesh: (options: {
     name?: string;
     positions: number[];
@@ -144,7 +147,7 @@ export interface ProceduralGenerationResult {
 export interface ProceduralTemplate {
   id: ProceduralTemplateId;
   name: string;
-  category: 'Sci-Fi' | 'Astronomy' | 'Architecture' | 'Robotics' | 'Nature' | 'Kinetics';
+  category: 'Sci-Fi' | 'Astronomy' | 'Architecture' | 'Robotics' | 'Nature' | 'Kinetics' | 'Mechanical';
   description: string;
   tags: string[];
   generate: (params?: Record<string, any>) => ProceduralGenerationResult;
