@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as THREE from 'three';
 import { generateRealisticHumanScene } from '../src/core/character';
-import { exportSceneToGLTFBuffer, exportSceneToOBJString } from '../src/core/io';
+import { exportSceneToGLTFBuffer, ProjectSaveData } from '../src/core/io';
 
 async function main() {
   console.log('Generating procedural realistic human scene...');
@@ -16,9 +16,25 @@ async function main() {
   fs.writeFileSync(glbPath, Buffer.from(glbBuffer));
   console.log(`Saved GLB to ${glbPath} (${glbBuffer.byteLength} bytes)`);
 
+  const projectData: ProjectSaveData = {
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    items: human.allItems,
+    tracks: [],
+    environment: {
+      backgroundColor: '#ffffff',
+      ambientIntensity: 0.8,
+      directionalIntensity: 1.5,
+      showGrid: true,
+      showAxes: true,
+      shadows: true,
+      preset: 'studio',
+    },
+  };
+
   const jsonPath = '/home/sudpy/Downloads/PolyForge-Realistic-Human.json';
-  fs.writeFileSync(jsonPath, JSON.stringify(human.stats, null, 2));
-  console.log(`Saved stats JSON to ${jsonPath}`);
+  fs.writeFileSync(jsonPath, JSON.stringify(projectData, null, 2));
+  console.log(`Saved full project JSON to ${jsonPath}`);
 }
 
 main().catch((err) => {

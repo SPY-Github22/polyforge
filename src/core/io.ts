@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import { SceneItem, AnimationTrack, EnvironmentSettings, MaterialProperties, Modifier } from '../types';
+import { SceneItem, AnimationTrack, EnvironmentSettings, MaterialProperties, Modifier, TexturePreset } from '../types';
 import { createPrimitiveGeometry, applyModifiers } from './geometry';
 import { createMaterial } from './material';
 
@@ -492,7 +492,7 @@ export function parseProjectFile(jsonContent: string): ProjectSaveData {
     throw new Error(`Corrupted JSON file: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.items)) {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !Array.isArray(parsed.items)) {
     throw new Error('Invalid project file format: missing items array.');
   }
 
@@ -542,9 +542,8 @@ export function parseProjectFile(jsonContent: string): ProjectSaveData {
       opacity: typeof rawMat.opacity === 'number' ? rawMat.opacity : DEFAULT_MATERIAL.opacity,
       transparent: Boolean(rawMat.transparent),
       wireframe: Boolean(rawMat.wireframe),
-      texturePreset: ['none', 'checker', 'uv_grid', 'stripes'].includes(rawMat.texturePreset)
-        ? rawMat.texturePreset
-        : 'none',
+      texturePreset: typeof rawMat.texturePreset === 'string' ? (rawMat.texturePreset as TexturePreset) : 'none',
+      vertexColors: Boolean(rawMat.vertexColors),
     };
 
     const sanitizedModifiers: Modifier[] = Array.isArray(raw.modifiers)

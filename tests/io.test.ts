@@ -105,6 +105,30 @@ describe('Project IO and Serialization', () => {
     expect(item.modifiers).toEqual([]);
   });
 
+  it('preserves vertexColors and rich texturePreset values on project import', () => {
+    const json = JSON.stringify({
+      version: '1.0.0',
+      items: [
+        {
+          id: 'female-body',
+          name: 'Female Anatomy',
+          type: 'mesh',
+          primitiveType: 'custom',
+          material: {
+            color: '#e0ac82',
+            texturePreset: 'skin_tone',
+            vertexColors: true,
+          },
+        },
+      ],
+    });
+
+    const parsed = parseProjectFile(json);
+    expect(parsed.items.length).toBe(1);
+    expect(parsed.items[0].material.texturePreset).toBe('skin_tone');
+    expect(parsed.items[0].material.vertexColors).toBe(true);
+  });
+
   it('throws clear syntax error on malformed JSON string', () => {
     expect(() => parseProjectFile('{ broken json: ')).toThrow('Corrupted JSON file');
   });

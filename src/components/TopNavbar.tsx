@@ -86,6 +86,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const handleShortcut = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        fileInputRef.current?.click();
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
+
   const handleMenuClick = (e: React.MouseEvent, menuName: string) => {
     e.stopPropagation();
     setActiveMenu(activeMenu === menuName ? null : menuName);
@@ -109,11 +120,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
   return (
     <header className="h-12 bg-studio-900 border-b border-studio-750 px-3 flex items-center justify-between select-none z-50 text-xs">
-      {/* Hidden file input for project open */}
+      {/* Hidden file input for project open (supports project JSON & 3D models) */}
       <input
         ref={fileInputRef}
         type="file"
-        accept=".json"
+        accept=".json,.pfproj,.glb,.gltf,.obj,.stl"
         className="hidden"
         onChange={handleFileInputChange}
       />

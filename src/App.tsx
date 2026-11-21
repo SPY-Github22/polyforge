@@ -500,16 +500,69 @@ export const App: React.FC = () => {
 
   const handleOpenProject = async (file: File) => {
     try {
+      const ext = file.name.split('.').pop()?.toLowerCase();
+
+      // 1. Direct 3D Model Import (.glb, .gltf, .obj, .stl)
+      if (['glb', 'gltf', 'obj', 'stl'].includes(ext || '')) {
+        const result = await importModelFromFile(file, {
+          autoCenter: true,
+          autoScale: true,
+          targetMaxDimension: 3.5,
+        });
+
+        if (result.items.length === 0) {
+          alert(`No valid 3D meshes found in ${file.name}.`);
+          return;
+        }
+
+        history.clear();
+        setSceneItems(result.items);
+        setTracks([]);
+        setSelectedId(result.items[0].id);
+
+        if (engineRef.current) {
+          engineRef.current.syncSceneItems(result.items);
+          engineRef.current.focusObject(result.items[0].id);
+        }
+        return;
+      }
+
+      // 2. Project JSON or Character Metadata JSON
       const text = await file.text();
-      const data = parseProjectFile(text);
+      let items: SceneItem[] = [];
+      let newTracks: AnimationTrack[] = [];
+      let env: EnvironmentSettings | undefined;
+
+      try {
+        const rawJson = JSON.parse(text);
+
+        // Detect standalone character stats/metadata JSON (e.g. PolyForge-Realistic-Female.json)
+        if (rawJson && typeof rawJson === 'object' && !Array.isArray(rawJson.items) && rawJson.bodyVertices) {
+          const isFemale = rawJson.height === 1.68 || file.name.toLowerCase().includes('female');
+          const scene = isFemale ? generateRealisticFemaleScene() : generateRealisticHumanScene();
+          items = scene.allItems;
+        } else {
+          const data = parseProjectFile(text);
+          items = data.items;
+          newTracks = data.tracks || [];
+          env = data.environment;
+        }
+      } catch (parseErr) {
+        // Fallback to strict project file parsing
+        const data = parseProjectFile(text);
+        items = data.items;
+        newTracks = data.tracks || [];
+        env = data.environment;
+      }
+
       history.clear();
-      setSceneItems(data.items);
-      setTracks(data.tracks || []);
-      if (data.environment) setEnvironment(data.environment);
-      setSelectedId(data.items.length > 0 ? data.items[0].id : null);
-      // Immediately populate engine meshes and center orbit controls on model bounding box center (y ≈ 4.5m)
+      setSceneItems(items);
+      setTracks(newTracks);
+      if (env) setEnvironment(env);
+      setSelectedId(items.length > 0 ? items[0].id : null);
+
       if (engineRef.current) {
-        engineRef.current.syncSceneItems(data.items);
+        engineRef.current.syncSceneItems(items);
         engineRef.current.focusObject(null);
       }
     } catch (err) {
@@ -700,6 +753,13 @@ export const App: React.FC = () => {
         return;
       }
 
+      // New Scene (Ctrl+N)
+      if ((e.ctrlKey || e.metaKey) && key === 'n') {
+        e.preventDefault();
+        handleNewScene();
+        return;
+      }
+
       // AI Studio Toggle (Ctrl+Shift+A)
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'a') {
         e.preventDefault();
@@ -785,7 +845,21 @@ export const App: React.FC = () => {
   const activeTrack = tracks.find((t) => t.objectId === selectedId);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-studio-950 text-slate-100 select-none overflow-hidden font-sans">
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+          handleOpenProject(file);
+        }
+      }}
+      className="flex flex-col h-screen w-screen bg-studio-950 text-slate-100 select-none overflow-hidden font-sans"
+    >
       {/* Top Navigation Bar */}
       <TopNavbar
         canUndo={history.canUndo()}
