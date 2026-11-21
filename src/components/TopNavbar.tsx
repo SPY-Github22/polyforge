@@ -43,6 +43,7 @@ interface TopNavbarProps {
   isAIOpen: boolean;
   onToggleAI: () => void;
   onAddAnimatedBicycle?: () => void;
+  onAddAnimatedCyclist?: () => void;
   onAddRealisticHuman?: () => void;
   onAddRealisticFemale?: () => void;
   onImportModel?: (file: File) => void;
@@ -71,6 +72,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   isAIOpen,
   onToggleAI,
   onAddAnimatedBicycle,
+  onAddAnimatedCyclist,
   onAddRealisticHuman,
   onAddRealisticFemale,
   onImportModel,
@@ -407,6 +409,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                       <Activity size={12} className="text-emerald-400" />
                       Animated Bicycle Circuit
                     </button>
+                    {onAddAnimatedCyclist && (
+                      <button
+                        onClick={() => {
+                          onAddAnimatedCyclist();
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center gap-2 text-cyan-400 font-medium"
+                      >
+                        <Activity size={12} className="text-cyan-400" />
+                        Animated Cyclist Circuit (Human on Bicycle)
+                      </button>
+                    )}
                   </>
                 )}
               </div>

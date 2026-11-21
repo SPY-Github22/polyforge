@@ -28,6 +28,7 @@ import {
   convertPolyforgeTracksToAnimationClip,
 } from './core/io';
 import { generateAnimatedBicycleCircuit } from './core/bicycle';
+import { generateAnimatedCyclistCircuit } from './core/cyclist';
 import { generateRealisticHumanScene, generateRealisticFemaleScene } from './core/character';
 import { importModelFromFile } from './core/modelImporter';
 import { history } from './core/history';
@@ -635,6 +636,28 @@ export const App: React.FC = () => {
     }));
   };
 
+  const handleAddAnimatedCyclist = () => {
+    const circuit = generateAnimatedCyclistCircuit({ totalFrames: 360, fps: 30 });
+    setSceneItems((prev) => {
+      const filtered = prev.filter((it) => it.id !== 'default-cube');
+      return [...filtered, ...circuit.allItems];
+    });
+    setTracks((prev) => [...prev, ...circuit.tracks]);
+    setTimelineState((prev) => ({
+      ...prev,
+      currentFrame: 0,
+      totalFrames: 360,
+      fps: 30,
+      isPlaying: true,
+      isLooping: true,
+    }));
+    setSelectedId(circuit.cyclistCharacter.bodyItem.id);
+    if (engineRef.current) {
+      engineRef.current.syncSceneItems(circuit.allItems);
+      engineRef.current.focusObject(null);
+    }
+  };
+
   const handleAddRealisticHuman = () => {
     const human = generateRealisticHumanScene();
     setSceneItems((prev) => {
@@ -884,6 +907,7 @@ export const App: React.FC = () => {
         isAIOpen={isAIOpen}
         onToggleAI={() => setIsAIOpen((prev) => !prev)}
         onAddAnimatedBicycle={handleAddAnimatedBicycle}
+        onAddAnimatedCyclist={handleAddAnimatedCyclist}
         onAddRealisticHuman={handleAddRealisticHuman}
         onAddRealisticFemale={handleAddRealisticFemale}
         onImportModel={handleImportModel}

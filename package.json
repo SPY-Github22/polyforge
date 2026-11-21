@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "tsc --noEmit",
+    "export:cyclist": "tsx scripts/export-animated-cyclist.ts",
     "polyforge": "tsx cli/polyforge-agent.ts",
     "polyforge-mcp": "tsx cli/polyforge-mcp.ts"
   },

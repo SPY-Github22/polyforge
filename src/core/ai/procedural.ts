@@ -10,6 +10,7 @@ import {
   ProceduralTemplateId,
 } from './types';
 import { generateRealisticBicycle } from '../bicycle';
+import { generateAnimatedCyclistCircuit } from '../cyclist';
 import { generateRealisticHumanScene, generateRealisticFemaleScene } from '../character';
 
 // Helper to create a unique ID
@@ -1255,6 +1256,38 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
       };
     },
   },
+  'animated-cyclist': {
+    id: 'animated-cyclist',
+    name: 'Animated Cyclist Circuit (Rider on Bicycle)',
+    category: 'Kinetics',
+    description: 'Physically authentic closed-circuit racetrack simulation featuring an ultra-realistic character actively riding a high-performance road bicycle with synchronized pedaling, wheel spin, centripetal lean, raked steering, cadence sway, and road micro-vibration.',
+    tags: ['cyclist', 'rider', 'ride', 'bike', 'bicycle', 'racing', 'pedal', 'animation', 'circuit', 'human', 'female', 'male'],
+    generate: () => {
+      const circuit = generateAnimatedCyclistCircuit({ totalFrames: 360, fps: 30 });
+      return {
+        description: 'End-to-end physically animated cyclist circuit: 12 kinematic sub-assemblies (7 bicycle + 5 cyclist), 12 synchronized keyframe tracks traversing 360 frames of a closed-circuit loop.',
+        items: circuit.allItems,
+        tracks: circuit.tracks,
+        timeline: {
+          currentFrame: 0,
+          totalFrames: 360,
+          fps: 30,
+          isPlaying: true,
+          isLooping: true,
+          autoKeying: false,
+        },
+        environment: {
+          backgroundColor: '#0a0f1d',
+          ambientIntensity: 0.8,
+          directionalIntensity: 1.5,
+          showGrid: true,
+          showAxes: true,
+          shadows: true,
+          preset: 'studio',
+        },
+      };
+    },
+  },
 };
 
 /**
@@ -1263,6 +1296,9 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
 export function matchProceduralTemplate(query: string): ProceduralTemplate {
   const q = query.toLowerCase();
 
+  if (q.includes('ride') || q.includes('cyclist') || (q.includes('bike') && q.includes('animat')) || (q.includes('bicycle') && q.includes('animat')) || (q.includes('bicycle') && q.includes('human'))) {
+    return PROCEDURAL_TEMPLATES['animated-cyclist'];
+  }
   if (q.includes('female') || q.includes('woman') || q.includes('girl') || q.includes('lady')) {
     return PROCEDURAL_TEMPLATES['realistic-female'];
   }

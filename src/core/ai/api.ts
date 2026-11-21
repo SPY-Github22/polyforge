@@ -19,6 +19,7 @@ import { insertOrUpdateKeyframe, ClosedCircuitOptions } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
 import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
 import { BicycleOptions, generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../bicycle';
+import { CyclistOptions, generateAnimatedCyclistCircuit } from '../cyclist';
 import {
   RealisticHumanOptions,
   RealisticFemaleOptions,
@@ -137,6 +138,19 @@ export function createPolyForgeScriptAPI(
       }
       logs.push(`[Mechanical] Generated animated bicycle circuit: ${circuit.items.length} sub-assemblies, ${circuit.tracks.length} tracks, ${circuit.totalFrames} frames.`);
       return { items: circuit.items, tracks: circuit.tracks };
+    },
+
+    createAnimatedCyclist: (options?: CyclistOptions): { items: SceneItem[]; tracks: AnimationTrack[] } => {
+      const circuit = generateAnimatedCyclistCircuit(options);
+      for (const item of circuit.allItems) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      for (const track of circuit.tracks) {
+        context.tracks.push(track);
+      }
+      logs.push(`[Kinematics] Generated animated cyclist circuit: ${circuit.allItems.length} sub-assemblies, ${circuit.tracks.length} tracks, ${circuit.totalFrames} frames.`);
+      return { items: circuit.allItems, tracks: circuit.tracks };
     },
 
     createHuman: (options?: RealisticHumanOptions): SceneItem[] => {

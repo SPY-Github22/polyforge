@@ -281,8 +281,10 @@ export function generateRealisticHumanScene(
     } else if (eyebrowVertIndices.has(oldIdx)) {
       bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
     } else if (eyeVertIndices.has(oldIdx)) {
-      const eyeDist = Math.hypot(Math.abs(px) - 0.0293, py - 1.653);
-      if (eyeDist < 0.0068 && pz > 0.052) {
+      const eyeDist = Math.hypot(Math.abs(px) - 0.0285, py - 1.653);
+      if (eyeDist < 0.0030 && pz > 0.050) {
+        bodyColors.push(0.04, 0.04, 0.05);
+      } else if (eyeDist < 0.0070 && pz > 0.050) {
         bodyColors.push(irisColorObj.r, irisColorObj.g, irisColorObj.b);
       } else {
         bodyColors.push(scleraColorObj.r, scleraColorObj.g, scleraColorObj.b);
@@ -291,10 +293,17 @@ export function generateRealisticHumanScene(
       bodyColors.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
     } else if (tongueVertIndices.has(oldIdx)) {
       bodyColors.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
-    } else if (Math.abs(px) < 0.022 && py >= 1.568 && py <= 1.598 && pz > 0.056) {
-      bodyColors.push(lipColorObj.r, lipColorObj.g, lipColorObj.b);
     } else {
-      bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+      const lipX = Math.abs(px) / 0.019;
+      const lipY = Math.abs(py - 1.583) / 0.010;
+      const lipDistSq = lipX * lipX + lipY * lipY;
+      if (lipDistSq < 1.0 && pz > 0.050) {
+        const lipAlpha = Math.max(0, 1.0 - lipDistSq);
+        const blendedLip = skinColorObj.clone().lerp(lipColorObj, 0.22 + 0.48 * lipAlpha);
+        bodyColors.push(blendedLip.r, blendedLip.g, blendedLip.b);
+      } else {
+        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+      }
     }
   }
 
@@ -714,17 +723,48 @@ export function generateRealisticFemaleScene(
       z *= 0.92;
     }
 
-    // 6. Feminine Facial Refinement (Delicate chin, soft jaw, refined nose bridge)
+    // 6. Feminine Facial Harmony: Soft youthful cheeks, gentle tapered jawline, refined chin
     if (y >= 1.44 && y <= 1.62) {
-      if (y < 1.50) {
-        x *= 0.88;
-        z *= 0.92;
-      } else if (y < 1.54) {
-        x *= 0.92;
+      if (y < 1.49) {
+        // Soft rounded chin and smooth tapered jawline (gentle 5% taper, zero hollows)
+        x *= 0.95;
+        z *= 0.97;
+      } else if (y < 1.53) {
+        // Smooth transition to midface
+        x *= 0.96;
       }
-      if (y >= 1.50 && y <= 1.56 && z > 0.05) {
-        x *= 0.88;
+      // Cheeks and zygomatic arches (y in [1.50, 1.57]):
+      // Youthful, soft feminine cheek volume - smooth convex curve, avoiding gaunt hollows
+      if (y >= 1.50 && y <= 1.57 && z > 0.04) {
+        const cheekFactor = Math.sin(((y - 1.50) / 0.07) * Math.PI);
+        z += 0.0035 * cheekFactor;
       }
+      // Fill nasolabial crease / fold to eliminate harsh aged hollows around the mouth
+      if (y >= 1.47 && y <= 1.53 && absX >= 0.015 && absX <= 0.038 && z > 0.042) {
+        const nFactor = Math.sin(((y - 1.47) / 0.06) * Math.PI);
+        z += 0.0045 * nFactor;
+      }
+    }
+
+    // 6b. Eye & Brow Orbit Refinement: Soften brow overhang, fill under-eye hollows, illuminate eyes
+    if (y >= 1.52 && y <= 1.63 && z > 0.038) {
+      // Soften heavy brow overhang (y in [1.57, 1.63])
+      if (y >= 1.57 && y <= 1.63 && absX < 0.05) {
+        z -= 0.006;
+      }
+      // Fill infraorbital tear-trough hollows to eliminate dark demonic eye-bag shadows
+      if (y >= 1.525 && y <= 1.560 && absX >= 0.015 && absX <= 0.045 && z > 0.038) {
+        z += 0.0055;
+      }
+      // Bring eye sphere forward to catch natural catchlight reflection
+      if (y >= 1.545 && y <= 1.575 && absX >= 0.018 && absX <= 0.040) {
+        z += 0.005;
+      }
+    }
+
+    // 6c. Natural Vermilion Lip Fullness
+    if (y >= 1.475 && y <= 1.515 && absX < 0.025 && z > 0.048) {
+      z += 0.0035;
     }
 
     // 7. Feminine Shoulder-Length Contoured Layered Hair (short01 verts: 7990..10973)
@@ -909,7 +949,7 @@ export function generateRealisticFemaleScene(
   const irisColorObj = new THREE.Color('#221712');
   const teethColorObj = new THREE.Color('#fcfcfd');
   const tongueColorObj = new THREE.Color('#cf606e');
-  const lipColorObj = new THREE.Color(skinColor).lerp(new THREE.Color('#c25265'), 0.44);
+  const lipColorObj = new THREE.Color(skinColor).lerp(new THREE.Color('#d94862'), 0.48);
 
   for (let i = 0; i < bodyUniqueVerts.length; i++) {
     const oldIdx = bodyUniqueVerts[i];
@@ -924,8 +964,10 @@ export function generateRealisticFemaleScene(
     } else if (eyebrowVertIndices.has(oldIdx)) {
       bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
     } else if (eyeVertIndices.has(oldIdx)) {
-      const eyeDist = Math.hypot(Math.abs(px) - 0.0277, py - 1.560);
-      if (eyeDist < 0.0064 && pz > 0.050) {
+      const eyeDist = Math.hypot(Math.abs(px) - 0.0268, py - 1.5604);
+      if (eyeDist < 0.0028 && pz > 0.048) {
+        bodyColors.push(0.04, 0.04, 0.05);
+      } else if (eyeDist < 0.0068 && pz > 0.048) {
         bodyColors.push(irisColorObj.r, irisColorObj.g, irisColorObj.b);
       } else {
         bodyColors.push(scleraColorObj.r, scleraColorObj.g, scleraColorObj.b);
@@ -934,10 +976,17 @@ export function generateRealisticFemaleScene(
       bodyColors.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
     } else if (tongueVertIndices.has(oldIdx)) {
       bodyColors.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
-    } else if (Math.abs(px) < 0.020 && py >= 1.478 && py <= 1.508 && pz > 0.052) {
-      bodyColors.push(lipColorObj.r, lipColorObj.g, lipColorObj.b);
     } else {
-      bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+      const lipX = Math.abs(px) / 0.0175;
+      const lipY = Math.abs(py - 1.493) / 0.009;
+      const lipDistSq = lipX * lipX + lipY * lipY;
+      if (lipDistSq < 1.0 && pz > 0.046) {
+        const lipAlpha = Math.max(0, 1.0 - lipDistSq);
+        const blendedLip = skinColorObj.clone().lerp(lipColorObj, 0.25 + 0.55 * lipAlpha);
+        bodyColors.push(blendedLip.r, blendedLip.g, blendedLip.b);
+      } else {
+        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+      }
     }
   }
 
@@ -993,8 +1042,8 @@ export function generateRealisticFemaleScene(
     },
     material: {
       color: skinColor,
-      roughness: 0.65,
-      metalness: 0.02,
+      roughness: 0.48,
+      metalness: 0.0,
       emissive: '#000000',
       emissiveIntensity: 0,
       transmission: 0,
@@ -1027,7 +1076,38 @@ export function generateRealisticFemaleScene(
     for (let i = 0; i < uSet.length; i++) {
       const oldIdx = uSet[i];
       remap.set(oldIdx, i);
-      positions.push(baseVerts[oldIdx * 3], baseVerts[oldIdx * 3 + 1], baseVerts[oldIdx * 3 + 2]);
+      let px = baseVerts[oldIdx * 3];
+      let py = baseVerts[oldIdx * 3 + 1];
+      let pz = baseVerts[oldIdx * 3 + 2];
+
+      // Tailor shirt hem to drape smoothly over jeans (eliminating gap and ragged sawtooth spikes)
+      if (id === 'female-top') {
+        if (py < 0.965 && Math.abs(px) < 0.22) {
+          if (py < 0.942) {
+            py = 0.938;
+          }
+          // Soft radial folded hem welt (+0.0035m radial expansion)
+          const rad = Math.hypot(px, pz);
+          if (rad > 0.05) {
+            const exp = 1.0 + 0.0035 / rad;
+            px *= exp;
+            pz *= exp;
+          }
+        }
+        // Smooth sleeve wrinkles along the arms
+        if (Math.abs(px) > 0.18 && py >= 0.90 && py <= 1.25) {
+          pz = pz * 0.95;
+        }
+      }
+
+      // Jeans waistband extension to guarantee smooth 2.4cm overlap under shirt
+      if (id === 'female-jeans') {
+        if (py > 0.952 && Math.abs(px) < 0.22) {
+          py = 0.960;
+        }
+      }
+
+      positions.push(px, py, pz);
     }
     const indices = tris.map((oldIdx) => remap.get(oldIdx)!);
 
@@ -1080,15 +1160,15 @@ export function generateRealisticFemaleScene(
 
   // 3. Casual Streetwear: Fitted Top, High-Waisted Jeans, and Sculpted Sneakers
   if (includeClothing) {
-    // Upper Garment: Fitted Streetwear Top
+    // Upper Garment: Fitted Streetwear Top (Clean tailored folded hemline)
     clothingUpperItem = buildItemFromQuads(
       'female-top',
       'Upper Garment (Fitted Streetwear Top)',
       upperQuads,
       {
         color: topColor,
-        roughness: 0.70,
-        metalness: 0.05,
+        roughness: 0.78,
+        metalness: 0.0,
         emissive: '#000000',
         emissiveIntensity: 0,
         transmission: 0,
@@ -1108,7 +1188,7 @@ export function generateRealisticFemaleScene(
       lowerQuads,
       {
         color: pantsColor,
-        roughness: 0.80,
+        roughness: 0.82,
         metalness: 0.0,
         emissive: '#000000',
         emissiveIntensity: 0,

@@ -190,7 +190,7 @@ describe('AI Scripting Engine & API', () => {
     expect(res.success).toBe(true);
     expect(res.items.length).toBeGreaterThan(5);
     expect(res.tracks.length).toBeGreaterThan(0);
-    expect(res.logs.some((l) => l.includes('Found templates: 10'))).toBe(true);
+    expect(res.logs.some((l) => l.includes('Found templates: 11'))).toBe(true);
   });
 
   it('generates mechanical bicycle directly via polyforge.createBicycle() in sandbox', async () => {
@@ -253,6 +253,23 @@ describe('AI Scripting Engine & API', () => {
     expect(res.items[2].name).toContain('Lower Garment');
     expect(res.items[3].name).toContain('Footwear');
     expect(res.items[4].name).toContain('Accessories');
+  });
+
+  it('generates animated cyclist circuit directly via polyforge.createAnimatedCyclist()', async () => {
+    const ctx = createTestContext();
+    const script = `
+      polyforge.clearScene();
+      const res = polyforge.createAnimatedCyclist({
+        totalFrames: 60,
+      });
+      polyforge.log('Cyclist parts: ' + res.items.length + ', tracks: ' + res.tracks.length);
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBe(12);
+    expect(res.tracks.length).toBe(12);
+    expect(res.logs.some((l) => l.includes('Cyclist parts: 12, tracks: 12'))).toBe(true);
   });
 
   it('generates realistic anatomical female with casual streetwear via polyforge.createFemaleHuman()', async () => {
