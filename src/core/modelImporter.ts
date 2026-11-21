@@ -7,6 +7,8 @@ import {
   MaterialProperties,
   TransformData,
   CustomGeometryData,
+  AnimationTrack,
+  Keyframe,
 } from '../types';
 
 export interface ImportModelOptions {
@@ -20,6 +22,7 @@ export interface ImportModelOptions {
 export interface ImportModelResult {
   items: SceneItem[];
   format: 'obj' | 'gltf' | 'glb' | 'stl' | 'unknown';
+  tracks?: AnimationTrack[];
   stats: {
     totalObjects: number;
     totalVertices: number;
@@ -292,6 +295,122 @@ export function parseSTL(
 }
 
 /**
+ * Extracts animation clips from GLTF into PolyForge AnimationTrack structures.
+ */
+export function extractGLTFAnimations(
+  animations: THREE.AnimationClip[] | undefined,
+  items: SceneItem[],
+  fps: number = 30
+): AnimationTrack[] {
+  if (!animations || animations.length === 0 || items.length === 0) return [];
+
+  const itemByName = new Map<string, SceneItem>();
+  for (const item of items) {
+    itemByName.set(item.name.toLowerCase().trim(), item);
+    itemByName.set(item.id.toLowerCase().trim(), item);
+    const sanitized = item.name.toLowerCase().trim().replace(/[\s\-_]+/g, '');
+    itemByName.set(sanitized, item);
+  }
+
+  const trackMap = new Map<string, Map<number, Partial<Keyframe['transform']>>>();
+
+  for (const clip of animations) {
+    for (const track of clip.tracks) {
+      const dotIdx = track.name.lastIndexOf('.');
+      if (dotIdx === -1) continue;
+
+      const nodeName = track.name.slice(0, dotIdx).toLowerCase().trim();
+      const prop = track.name.slice(dotIdx + 1);
+
+      let matchedItem = itemByName.get(nodeName);
+      if (!matchedItem) {
+        const sanitized = nodeName.replace(/[\s\-_]+/g, '');
+        matchedItem = itemByName.get(sanitized);
+      }
+      if (!matchedItem) continue;
+
+      if (!trackMap.has(matchedItem.id)) {
+        trackMap.set(matchedItem.id, new Map());
+      }
+      const itemKeyframes = trackMap.get(matchedItem.id)!;
+
+      const times = track.times;
+      const values = track.values;
+
+      if (prop === 'position') {
+        for (let i = 0; i < times.length; i++) {
+          const frame = Math.round(times[i] * fps);
+          if (!itemKeyframes.has(frame)) itemKeyframes.set(frame, {});
+          itemKeyframes.get(frame)!.position = [values[i * 3], values[i * 3 + 1], values[i * 3 + 2]];
+        }
+      } else if (prop === 'quaternion') {
+        for (let i = 0; i < times.length; i++) {
+          const frame = Math.round(times[i] * fps);
+          if (!itemKeyframes.has(frame)) itemKeyframes.set(frame, {});
+          const q = new THREE.Quaternion(
+            values[i * 4],
+            values[i * 4 + 1],
+            values[i * 4 + 2],
+            values[i * 4 + 3]
+          );
+          const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
+          itemKeyframes.get(frame)!.rotation = [e.x, e.y, e.z];
+        }
+      } else if (prop === 'scale') {
+        for (let i = 0; i < times.length; i++) {
+          const frame = Math.round(times[i] * fps);
+          if (!itemKeyframes.has(frame)) itemKeyframes.set(frame, {});
+          itemKeyframes.get(frame)!.scale = [values[i * 3], values[i * 3 + 1], values[i * 3 + 2]];
+        }
+      }
+    }
+  }
+
+  const resultTracks: AnimationTrack[] = [];
+  for (const [objectId, frameMap] of trackMap.entries()) {
+    const sortedFrames = Array.from(frameMap.keys()).sort((a, b) => a - b);
+    const keyframes: Keyframe[] = [];
+
+    let lastPos: [number, number, number] = [0, 0, 0];
+    let lastRot: [number, number, number] = [0, 0, 0];
+    let lastScale: [number, number, number] = [1, 1, 1];
+
+    const item = items.find((it) => it.id === objectId);
+    if (item?.transform) {
+      lastPos = [...item.transform.position];
+      lastRot = [...item.transform.rotation];
+      lastScale = [...item.transform.scale];
+    }
+
+    for (const frame of sortedFrames) {
+      const data = frameMap.get(frame)!;
+      if (data.position) lastPos = data.position;
+      if (data.rotation) lastRot = data.rotation;
+      if (data.scale) lastScale = data.scale;
+
+      keyframes.push({
+        frame,
+        transform: {
+          position: [lastPos[0], lastPos[1], lastPos[2]],
+          rotation: [lastRot[0], lastRot[1], lastRot[2]],
+          scale: [lastScale[0], lastScale[1], lastScale[2]],
+        },
+        interpolation: 'linear',
+      });
+    }
+
+    if (keyframes.length > 0) {
+      resultTracks.push({
+        objectId,
+        keyframes,
+      });
+    }
+  }
+
+  return resultTracks;
+}
+
+/**
  * Parses a GLTF or GLB binary/JSON file from ArrayBuffer or JSON string.
  */
 export async function parseGLTF(
@@ -310,8 +429,14 @@ export async function parseGLTF(
         gltfData,
         '',
         (gltf) => {
-          const result = convertThreeObjectToSceneItems(gltf.scene || new THREE.Group(), options);
+          const hasAnimations = Boolean(gltf.animations && gltf.animations.length > 0);
+          const effectiveOptions = hasAnimations
+            ? { ...options, preserveHierarchy: true, autoCenter: false, autoScale: false }
+            : options;
+
+          const result = convertThreeObjectToSceneItems(gltf.scene || new THREE.Group(), effectiveOptions);
           result.format = gltfData instanceof ArrayBuffer ? 'glb' : 'gltf';
+          result.tracks = extractGLTFAnimations(gltf.animations, result.items);
           resolve(result);
         },
         (error) => {

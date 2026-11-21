@@ -518,8 +518,28 @@ export const App: React.FC = () => {
 
         history.clear();
         setSceneItems(result.items);
-        setTracks([]);
+        const importedTracks = result.tracks || [];
+        setTracks(importedTracks);
         setSelectedId(result.items[0].id);
+
+        if (importedTracks.length > 0) {
+          let maxF = 0;
+          for (const tr of importedTracks) {
+            for (const kf of tr.keyframes) {
+              if (kf.frame > maxF) maxF = kf.frame;
+            }
+          }
+          if (maxF > 0) {
+            setTimelineState((prev) => ({
+              ...prev,
+              totalFrames: maxF,
+              currentFrame: 0,
+              fps: 30,
+              isPlaying: true,
+              isLooping: true,
+            }));
+          }
+        }
 
         if (engineRef.current) {
           engineRef.current.syncSceneItems(result.items);
@@ -601,6 +621,24 @@ export const App: React.FC = () => {
       });
 
       setSelectedId(result.items[0].id);
+
+      if (result.tracks && result.tracks.length > 0) {
+        setTracks((prev) => [...prev, ...result.tracks!]);
+        let maxF = 0;
+        for (const tr of result.tracks) {
+          for (const kf of tr.keyframes) {
+            if (kf.frame > maxF) maxF = kf.frame;
+          }
+        }
+        if (maxF > 0) {
+          setTimelineState((prev) => ({
+            ...prev,
+            totalFrames: Math.max(prev.totalFrames, maxF),
+            isPlaying: true,
+            isLooping: true,
+          }));
+        }
+      }
 
       if (engineRef.current) {
         engineRef.current.syncSceneItems(result.items);

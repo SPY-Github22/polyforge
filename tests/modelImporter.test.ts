@@ -6,6 +6,7 @@ import {
   convertThreeMaterial,
   convertThreeObjectToSceneItems,
   extractCustomGeometry,
+  extractGLTFAnimations,
 } from '../src/core/modelImporter';
 
 describe('Model Importer Suite (OBJ, STL, Materials)', () => {
@@ -129,5 +130,30 @@ endsolid test`;
     const mockFile = new File(['dummy'], 'test.docx', { type: 'application/msword' });
 
     await expect(importModelFromFile(mockFile)).rejects.toThrow(/unsupported 3D file format/i);
+  });
+
+  it('extracts GLTF animations into PolyForge AnimationTrack structures', () => {
+    const items: any[] = [
+      {
+        id: 'cube-1',
+        name: 'TestCube',
+        type: 'mesh',
+        transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
+        material: {},
+      },
+    ];
+
+    const times = [0, 1];
+    const posValues = [0, 0, 0, 10, 20, 30];
+    const posTrack = new THREE.VectorKeyframeTrack('TestCube.position', times, posValues);
+    const clip = new THREE.AnimationClip('TestClip', 1, [posTrack]);
+
+    const tracks = extractGLTFAnimations([clip], items, 30);
+    expect(tracks.length).toBe(1);
+    expect(tracks[0].objectId).toBe('cube-1');
+    expect(tracks[0].keyframes.length).toBe(2);
+    expect(tracks[0].keyframes[0].frame).toBe(0);
+    expect(tracks[0].keyframes[1].frame).toBe(30);
+    expect(tracks[0].keyframes[1].transform.position).toEqual([10, 20, 30]);
   });
 });
