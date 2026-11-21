@@ -21,6 +21,7 @@ import {
 export interface CyclistOptions extends BicycleOptions, ClosedCircuitOptions {
   gender?: 'female' | 'male';
   characterOptions?: RealisticFemaleOptions | RealisticHumanOptions;
+  articulated?: boolean; // default true for dynamic kinematic leg pedaling
 }
 
 export interface CyclistCircuitResult {
@@ -54,7 +55,8 @@ export interface CyclistCircuitResult {
  */
 export function poseCharacterAsCyclist(
   character: RealisticHumanResult,
-  gender: 'female' | 'male' = 'female'
+  gender: 'female' | 'male' = 'female',
+  articulated = false
 ): RealisticHumanResult {
   const isFemale = gender === 'female';
   const saddlePos = new THREE.Vector3(-0.150, 0.890, 0.0);
@@ -233,9 +235,9 @@ export function poseCharacterAsCyclist(
         const bX = 0.220 - (y0 - 1.15) * (0.220 - 0.185) / 0.07;
         isArm = absX > bX;
       } else if (y0 >= 0.90 && y0 < 1.15) {
-        isArm = absX > 0.220;
+        isArm = absX > 0.200;
       } else if (y0 < 0.90 && y0 >= handEndY - 0.08) {
-        isArm = absX > 0.200; // Hand & fingers
+        isArm = absX > 0.160; // Cleanly capture all hand & finger vertices
       }
     } else if (isAccessory) {
       isArm = y0 < 1.20 && absX > 0.18; // Smartwatch on wrist
@@ -352,11 +354,34 @@ export function poseCharacterAsCyclist(
       newPositions[i * 3 + 2] = zb;
     }
 
+    const isLowerGarment = item.id.includes('jeans') || item.id.includes('pants');
+    const isBody = item.id.includes('body');
+
+    let finalIndices = custom.indices;
+    if (articulated && (isBody || isLowerGarment) && custom.indices && custom.indices.length > 0) {
+      const keptIndices: number[] = [];
+      for (let t = 0; t < custom.indices.length; t += 3) {
+        const i0 = custom.indices[t];
+        const i1 = custom.indices[t + 1];
+        const i2 = custom.indices[t + 2];
+        const y0_0 = origPositions[i0 * 3 + 1];
+        const y0_1 = origPositions[i1 * 3 + 1];
+        const y0_2 = origPositions[i2 * 3 + 1];
+
+        // If all 3 vertices are below crotch, omit this triangle so the static limbs do not duplicate articulated IK limbs
+        if (y0_0 < standingCrotchY && y0_1 < standingCrotchY && y0_2 < standingCrotchY) {
+          continue;
+        }
+        keptIndices.push(i0, i1, i2);
+      }
+      finalIndices = keptIndices;
+    }
+
     // Construct Three.js BufferGeometry to recalculate smooth surface normals
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(newPositions, 3));
-    if (custom.indices && custom.indices.length > 0) {
-      geo.setIndex(custom.indices);
+    if (finalIndices && finalIndices.length > 0) {
+      geo.setIndex(finalIndices);
     }
     geo.computeVertexNormals();
 
@@ -370,6 +395,7 @@ export function poseCharacterAsCyclist(
           ...custom,
           positions: Array.from(newPositions),
           normals: newNormals,
+          indices: finalIndices,
         },
       },
     };
@@ -392,17 +418,149 @@ export function poseCharacterAsCyclist(
   };
 }
 
+function buildLimbItem(
+  id: string,
+  name: string,
+  length: number,
+  radiusTop: number,
+  radiusBottom: number,
+  color = '#1e293b'
+): SceneItem {
+  const geom = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 16, 4, false);
+  geom.translate(0, -length / 2, 0);
+  const pos = Array.from(geom.getAttribute('position').array as Float32Array);
+  const norm = Array.from(geom.getAttribute('normal').array as Float32Array);
+  const idx = Array.from(geom.index!.array as Uint16Array);
+  const uvs = new Array((pos.length / 3) * 2).fill(0);
+
+  return {
+    id,
+    name,
+    type: 'mesh',
+    primitiveType: 'custom',
+    geometryParams: {
+      customGeometry: {
+        positions: pos,
+        normals: norm,
+        uvs,
+        indices: idx,
+      },
+    },
+    transform: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    material: {
+      color,
+      roughness: 0.82,
+      metalness: 0.0,
+      emissive: '#000000',
+      emissiveIntensity: 0,
+      transmission: 0,
+      opacity: 1,
+      transparent: false,
+      wireframe: false,
+      texturePreset: 'denim_fabric',
+      vertexColors: false,
+    },
+    visible: true,
+    locked: false,
+  };
+}
+
+function buildShoeItem(
+  id: string,
+  name: string,
+  color = '#f8fafc'
+): SceneItem {
+  const geom = new THREE.BoxGeometry(0.24, 0.07, 0.08, 4, 2, 2);
+  geom.translate(0.03, 0.035, 0);
+  const pos = Array.from(geom.getAttribute('position').array as Float32Array);
+  const norm = Array.from(geom.getAttribute('normal').array as Float32Array);
+  const idx = Array.from(geom.index!.array as Uint16Array);
+  const uvs = new Array((pos.length / 3) * 2).fill(0);
+
+  return {
+    id,
+    name,
+    type: 'mesh',
+    primitiveType: 'custom',
+    geometryParams: {
+      customGeometry: {
+        positions: pos,
+        normals: norm,
+        uvs,
+        indices: idx,
+      },
+    },
+    transform: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+    material: {
+      color,
+      roughness: 0.35,
+      metalness: 0.05,
+      emissive: '#000000',
+      emissiveIntensity: 0,
+      transmission: 0,
+      opacity: 1,
+      transparent: false,
+      wireframe: false,
+      texturePreset: 'leather_boot',
+      vertexColors: false,
+    },
+    visible: true,
+    locked: false,
+  };
+}
+
+function solveLegIK(
+  hip: THREE.Vector3,
+  pedal: THREE.Vector3,
+  crankAngle: number,
+  L1 = 0.420,
+  L2 = 0.400
+) {
+  const ankle = new THREE.Vector3(pedal.x - 0.040, pedal.y + 0.070, hip.z);
+  const D = new THREE.Vector3().subVectors(ankle, hip);
+  const d = Math.max(Math.abs(L1 - L2) + 0.01, Math.min(L1 + L2 - 0.005, D.length()));
+
+  const cosAlpha = Math.max(-1, Math.min(1, (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d)));
+  const alpha = Math.acos(cosAlpha);
+
+  const u = D.clone().normalize();
+  let n = new THREE.Vector3(-u.y, u.x, 0).normalize();
+  if (n.x < 0) n.negate();
+
+  const K = hip.clone().addScaledVector(u, L1 * Math.cos(alpha)).addScaledVector(n, L1 * Math.sin(alpha));
+
+  const dirThigh = new THREE.Vector3().subVectors(K, hip).normalize();
+  const Q_thigh = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), dirThigh);
+
+  const dirShin = new THREE.Vector3().subVectors(ankle, K).normalize();
+  const Q_shin = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), dirShin);
+
+  const anklePitch = 0.12 * Math.cos(crankAngle);
+  const Q_shoe = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), anklePitch);
+
+  return { K, Q_thigh, Q_shin, Q_shoe };
+}
+
 /**
  * Generates an end-to-end simulation of an ultra-realistic character actively riding
  * the high-performance road bicycle along the 360-frame closed-circuit racetrack loop.
  *
- * Combines 12 kinematic sub-assemblies (7 bicycle + 5 cyclist) with fully synchronized
- * trajectories, pedaling cadence sway, wheel spin, inward centripetal lean, and raked cockpit steering.
+ * Features dynamic kinematic 2-bone analytical IK pedaling, cadence sway, wheel spin,
+ * inward centripetal lean, and raked cockpit steering.
  */
 export function generateAnimatedCyclistCircuit(
   options: CyclistOptions = {}
 ): CyclistCircuitResult {
   const gender = options.gender ?? 'female';
+  const isArticulated = options.articulated !== false;
 
   // 1. Generate Modular Bicycle (7 sub-assemblies)
   const modularBicycle = generateModularBicycle(options);
@@ -414,9 +572,37 @@ export function generateAnimatedCyclistCircuit(
       : generateRealisticHumanScene(options.characterOptions as RealisticHumanOptions);
 
   // 3. Pose Character into Ergonomic Cycling Posture
-  const posedCharacter = poseCharacterAsCyclist(baseCharacter, gender);
+  const posedCharacter = poseCharacterAsCyclist(baseCharacter, gender, isArticulated);
 
-  // 4. Generate Closed-Circuit Kinematic Trajectory (360 frames @ 30 fps)
+  const pantsColor = (options.characterOptions as any)?.pantsColor || '#1e293b';
+  const shoesColor = (options.characterOptions as any)?.shoesColor || '#f8fafc';
+
+  // 4. Generate Articulated Pedaling Limbs or Monolithic Items
+  let cyclistItems: SceneItem[] = [];
+  let rThighItem: SceneItem | undefined;
+  let rShinItem: SceneItem | undefined;
+  let rShoeItem: SceneItem | undefined;
+  let lThighItem: SceneItem | undefined;
+  let lShinItem: SceneItem | undefined;
+  let lShoeItem: SceneItem | undefined;
+
+  if (isArticulated) {
+    rThighItem = buildLimbItem('cyclist-right-thigh', 'Right Thigh (Articulated)', 0.420, 0.075, 0.058, pantsColor);
+    rShinItem = buildLimbItem('cyclist-right-shin', 'Right Shin (Articulated)', 0.400, 0.058, 0.042, pantsColor);
+    rShoeItem = buildShoeItem('cyclist-right-shoe', 'Right Sneaker (Pedal Planted)', shoesColor);
+
+    lThighItem = buildLimbItem('cyclist-left-thigh', 'Left Thigh (Articulated)', 0.420, 0.075, 0.058, pantsColor);
+    lShinItem = buildLimbItem('cyclist-left-shin', 'Left Shin (Articulated)', 0.400, 0.058, 0.042, pantsColor);
+    lShoeItem = buildShoeItem('cyclist-left-shoe', 'Left Sneaker (Pedal Planted)', shoesColor);
+
+    // Torso items (filter out static footwear since shoes are dynamically pedal-planted)
+    const torsoItems = posedCharacter.allItems.filter((it) => !it.id.includes('shoes') && !it.id.includes('sneakers'));
+    cyclistItems = [...torsoItems, rThighItem, rShinItem, rShoeItem, lThighItem, lShinItem, lShoeItem];
+  } else {
+    cyclistItems = posedCharacter.allItems;
+  }
+
+  // 5. Generate Closed-Circuit Kinematic Trajectory (360 frames @ 30 fps)
   const trajectory = generateClosedCircuitTrajectory(options);
   const totalFrames = trajectory.length - 1;
   const fps = options.fps ?? 30;
@@ -442,11 +628,14 @@ export function generateAnimatedCyclistCircuit(
   const leftPedalKeyframes: Keyframe[] = [];
   const rightPedalKeyframes: Keyframe[] = [];
 
-  // Keyframe buffers for 5 cyclist items (rider items move in sync with bicycle chassis & kinematics)
+  // Keyframe buffers for cyclist items
   const cyclistKeyframeMap = new Map<string, Keyframe[]>();
-  for (const item of posedCharacter.allItems) {
+  for (const item of cyclistItems) {
     cyclistKeyframeMap.set(item.id, []);
   }
+
+  const Hr = new THREE.Vector3(-0.150, 0.880, 0.085);
+  const Hl = new THREE.Vector3(-0.150, 0.880, -0.085);
 
   for (const pt of trajectory) {
     const f = pt.frame;
@@ -461,7 +650,6 @@ export function generateAnimatedCyclistCircuit(
       new THREE.Euler(rollAngle, yawAngle, pitchAngle, 'YXZ')
     );
 
-    // Frame keyframe
     frameKeyframes.push({
       frame: f,
       transform: {
@@ -472,7 +660,7 @@ export function generateAnimatedCyclistCircuit(
       interpolation: 'linear',
     });
 
-    // 1. Cockpit: Fork & Handlebars steer into the turn around raked steerAxis
+    // 1. Cockpit: Fork & Handlebars steer into turn
     const steerRotAngle = -pt.steeringAngle;
     const Q_steer = new THREE.Quaternion().setFromAxisAngle(steerAxis, steerRotAngle);
     const Q_cockpit = Q_frame.clone().multiply(Q_steer);
@@ -509,7 +697,7 @@ export function generateAnimatedCyclistCircuit(
       interpolation: 'linear',
     });
 
-    // 3. Rear Wheel: Aligned with frame, spins along axle
+    // 3. Rear Wheel: Spins along axle
     const P_rearWheel = rearAxle.clone().applyQuaternion(Q_frame).add(P_frame);
 
     rearWheelKeyframes.push({
@@ -542,7 +730,7 @@ export function generateAnimatedCyclistCircuit(
       bbCenter.y + Math.sin(curRightCrankAngle) * crankLen,
       0.075
     );
-    const P_rightPedal = r_rightPedal_frame.applyQuaternion(Q_frame).add(P_frame);
+    const P_rightPedal = r_rightPedal_frame.clone().applyQuaternion(Q_frame).add(P_frame);
 
     rightPedalKeyframes.push({
       frame: f,
@@ -561,7 +749,7 @@ export function generateAnimatedCyclistCircuit(
       bbCenter.y + Math.sin(curLeftCrankAngle) * crankLen,
       -0.075
     );
-    const P_leftPedal = r_leftPedal_frame.applyQuaternion(Q_frame).add(P_frame);
+    const P_leftPedal = r_leftPedal_frame.clone().applyQuaternion(Q_frame).add(P_frame);
 
     leftPedalKeyframes.push({
       frame: f,
@@ -573,18 +761,139 @@ export function generateAnimatedCyclistCircuit(
       interpolation: 'linear',
     });
 
-    // 7. Rider Sub-Assemblies: follow the bicycle frame world kinematics
-    for (const item of posedCharacter.allItems) {
-      const kfs = cyclistKeyframeMap.get(item.id)!;
-      kfs.push({
+    // 7. Rider Kinematics (Dynamic Leg Pedaling IK & Torso Cadence Sway)
+    if (isArticulated && rThighItem && rShinItem && rShoeItem && lThighItem && lShinItem && lShoeItem) {
+      // Analytical 2-Bone IK for Right Leg
+      const rightIK = solveLegIK(Hr, r_rightPedal_frame, curRightCrankAngle);
+      const P_rthigh = Hr.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_rthigh = Q_frame.clone().multiply(rightIK.Q_thigh);
+      const eRthigh = new THREE.Euler().setFromQuaternion(Q_rthigh, 'YXZ');
+
+      cyclistKeyframeMap.get(rThighItem.id)!.push({
         frame: f,
         transform: {
-          position: [P_frame.x, P_frame.y, P_frame.z],
-          rotation: [rollAngle, yawAngle, pitchAngle],
+          position: [P_rthigh.x, P_rthigh.y, P_rthigh.z],
+          rotation: [eRthigh.x, eRthigh.y, eRthigh.z],
           scale: [1, 1, 1],
         },
         interpolation: 'linear',
       });
+
+      const P_rshin = rightIK.K.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_rshin = Q_frame.clone().multiply(rightIK.Q_shin);
+      const eRshin = new THREE.Euler().setFromQuaternion(Q_rshin, 'YXZ');
+
+      cyclistKeyframeMap.get(rShinItem.id)!.push({
+        frame: f,
+        transform: {
+          position: [P_rshin.x, P_rshin.y, P_rshin.z],
+          rotation: [eRshin.x, eRshin.y, eRshin.z],
+          scale: [1, 1, 1],
+        },
+        interpolation: 'linear',
+      });
+
+      const P_rshoe = r_rightPedal_frame.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_rshoe = Q_frame.clone().multiply(rightIK.Q_shoe);
+      const eRshoe = new THREE.Euler().setFromQuaternion(Q_rshoe, 'YXZ');
+
+      cyclistKeyframeMap.get(rShoeItem.id)!.push({
+        frame: f,
+        transform: {
+          position: [P_rshoe.x, P_rshoe.y, P_rshoe.z],
+          rotation: [eRshoe.x, eRshoe.y, eRshoe.z],
+          scale: [1, 1, 1],
+        },
+        interpolation: 'linear',
+      });
+
+      // Analytical 2-Bone IK for Left Leg
+      const leftIK = solveLegIK(Hl, r_leftPedal_frame, curLeftCrankAngle);
+      const P_lthigh = Hl.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_lthigh = Q_frame.clone().multiply(leftIK.Q_thigh);
+      const eLthigh = new THREE.Euler().setFromQuaternion(Q_lthigh, 'YXZ');
+
+      cyclistKeyframeMap.get(lThighItem.id)!.push({
+        frame: f,
+        transform: {
+          position: [P_lthigh.x, P_lthigh.y, P_lthigh.z],
+          rotation: [eLthigh.x, eLthigh.y, eLthigh.z],
+          scale: [1, 1, 1],
+        },
+        interpolation: 'linear',
+      });
+
+      const P_lshin = leftIK.K.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_lshin = Q_frame.clone().multiply(leftIK.Q_shin);
+      const eLshin = new THREE.Euler().setFromQuaternion(Q_lshin, 'YXZ');
+
+      cyclistKeyframeMap.get(lShinItem.id)!.push({
+        frame: f,
+        transform: {
+          position: [P_lshin.x, P_lshin.y, P_lshin.z],
+          rotation: [eLshin.x, eLshin.y, eLshin.z],
+          scale: [1, 1, 1],
+        },
+        interpolation: 'linear',
+      });
+
+      const P_lshoe = r_leftPedal_frame.clone().applyQuaternion(Q_frame).add(P_frame);
+      const Q_lshoe = Q_frame.clone().multiply(leftIK.Q_shoe);
+      const eLshoe = new THREE.Euler().setFromQuaternion(Q_lshoe, 'YXZ');
+
+      cyclistKeyframeMap.get(lShoeItem.id)!.push({
+        frame: f,
+        transform: {
+          position: [P_lshoe.x, P_lshoe.y, P_lshoe.z],
+          rotation: [eLshoe.x, eLshoe.y, eLshoe.z],
+          scale: [1, 1, 1],
+        },
+        interpolation: 'linear',
+      });
+
+      // Upper body & torso items: dynamic pedaling cadence sway
+      const cadenceSwayRoll = 0.015 * Math.sin(curRightCrankAngle);
+      const cadenceSwayZ = 0.005 * Math.sin(curRightCrankAngle);
+      const P_torso = new THREE.Vector3(0, 0, cadenceSwayZ).applyQuaternion(Q_frame).add(P_frame);
+      const Q_torso = Q_frame.clone().multiply(
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), cadenceSwayRoll)
+      );
+      const eTorso = new THREE.Euler().setFromQuaternion(Q_torso, 'YXZ');
+
+      for (const item of cyclistItems) {
+        if (
+          item.id === rThighItem.id ||
+          item.id === rShinItem.id ||
+          item.id === rShoeItem.id ||
+          item.id === lThighItem.id ||
+          item.id === lShinItem.id ||
+          item.id === lShoeItem.id
+        ) {
+          continue; // Already keyed with IK transforms
+        }
+        cyclistKeyframeMap.get(item.id)!.push({
+          frame: f,
+          transform: {
+            position: [P_torso.x, P_torso.y, P_torso.z],
+            rotation: [eTorso.x, eTorso.y, eTorso.z],
+            scale: [1, 1, 1],
+          },
+          interpolation: 'linear',
+        });
+      }
+    } else {
+      // Monolithic fallback
+      for (const item of cyclistItems) {
+        cyclistKeyframeMap.get(item.id)!.push({
+          frame: f,
+          transform: {
+            position: [P_frame.x, P_frame.y, P_frame.z],
+            rotation: [rollAngle, yawAngle, pitchAngle],
+            scale: [1, 1, 1],
+          },
+          interpolation: 'linear',
+        });
+      }
     }
   }
 
@@ -598,23 +907,28 @@ export function generateAnimatedCyclistCircuit(
     { objectId: modularBicycle.rightPedalItem.id, keyframes: rightPedalKeyframes },
   ];
 
-  for (const item of posedCharacter.allItems) {
+  for (const item of cyclistItems) {
     tracks.push({
       objectId: item.id,
       keyframes: cyclistKeyframeMap.get(item.id)!,
     });
   }
 
-  const allItems: SceneItem[] = [...modularBicycle.allItems, ...posedCharacter.allItems];
+  const allItems: SceneItem[] = [...modularBicycle.allItems, ...cyclistItems];
 
   const bStats = modularBicycle.stats;
-  const cStats = posedCharacter.stats;
+  let totalCyclistVerts = 0;
+  let totalCyclistTris = 0;
+  for (const it of cyclistItems) {
+    totalCyclistVerts += (it.geometryParams?.customGeometry?.positions.length ?? 0) / 3;
+    totalCyclistTris += (it.geometryParams?.customGeometry?.indices?.length ?? 0) / 3;
+  }
 
   return {
     modularBicycle,
     cyclistCharacter: posedCharacter,
     bicycleItems: modularBicycle.allItems,
-    cyclistItems: posedCharacter.allItems,
+    cyclistItems,
     allItems,
     tracks,
     trajectory,
@@ -623,10 +937,10 @@ export function generateAnimatedCyclistCircuit(
     stats: {
       bicycleVertices: bStats.totalVertices,
       bicycleTriangles: bStats.totalTriangles,
-      cyclistVertices: cStats.totalVertices,
-      cyclistTriangles: cStats.totalTriangles,
-      totalVertices: bStats.totalVertices + cStats.totalVertices,
-      totalTriangles: bStats.totalTriangles + cStats.totalTriangles,
+      cyclistVertices: totalCyclistVerts,
+      cyclistTriangles: totalCyclistTris,
+      totalVertices: bStats.totalVertices + totalCyclistVerts,
+      totalTriangles: bStats.totalTriangles + totalCyclistTris,
       totalItems: allItems.length,
     },
   };

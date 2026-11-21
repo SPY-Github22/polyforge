@@ -267,9 +267,9 @@ describe('AI Scripting Engine & API', () => {
 
     const res = await executePolyForgeScript(script, ctx);
     expect(res.success).toBe(true);
-    expect(res.items.length).toBe(12);
-    expect(res.tracks.length).toBe(12);
-    expect(res.logs.some((l) => l.includes('Cyclist parts: 12, tracks: 12'))).toBe(true);
+    expect(res.items.length).toBe(17);
+    expect(res.tracks.length).toBe(17);
+    expect(res.logs.some((l) => l.includes('Cyclist parts: 17, tracks: 17'))).toBe(true);
   });
 
   it('generates realistic anatomical female with casual streetwear via polyforge.createFemaleHuman()', async () => {
