@@ -898,33 +898,33 @@ export function generateRealisticFemaleScene(
       const sinP = Math.sin(phi); // +Z is front, -Z is back
       const cosP = Math.cos(phi); // lateral X
 
-      // Conformal hairline: natural forehead height in front (y ~ 1.608m), temple/ear curve (y ~ 1.558m), nape in back (y ~ 1.514m)
-      const thetaMax = 1.74 - 0.61 * sinP;
+      // Conformal hairline: natural curved feminine forehead hairline, temple/ear curve, nape in back
+      const thetaMax = 1.66 - 0.48 * sinP;
       const theta = ringT * thetaMax;
       const sinT = Math.sin(theta);
       const cosT = Math.cos(theta);
 
       const rx = 0.084;
       const ry = 0.090;
-      const rz = sinP > 0 ? 0.098 : 0.090;
+      const rz = sinP > 0 ? 0.096 : 0.090;
 
       // Volumetric body conforming to skull
-      let vol = 0.007;
-      if (sinP > 0.25 && ringT > 0.9) {
-        vol = 0.002; // Clean feathered edge at forehead hairline
+      let vol = 0.006;
+      if (sinP > 0.3 && ringT > 0.85) {
+        vol = 0.002; // Soft feathered transition at forehead
       }
-      if (cosT > 0.65) {
-        vol = 0.012; // Crown volume
+      if (cosT > 0.6) {
+        vol = 0.010; // Crown fullness
       }
 
-      // Natural side tresses framing temples and cheeks
-      let drapeY = 0;
-      if (Math.abs(cosP) > 0.65 && sinP > -0.2 && ringT > 0.8) {
-        drapeY = -0.025 * (ringT - 0.8) * 5;
+      // Smooth conformal temple and side tresses (no sharp flaps)
+      let sideEase = 0;
+      if (Math.abs(cosP) > 0.65 && sinP > -0.3 && ringT > 0.8) {
+        sideEase = -0.010 * (ringT - 0.8) * 5;
       }
 
       const px = hairCx + (rx + vol) * sinT * cosP;
-      const py = hairCy + (ry + vol) * cosT + drapeY;
+      const py = hairCy + (ry + vol) * cosT + sideEase;
       const pz = hairCz + (rz + vol) * sinT * sinP;
 
       const vIdx = allPos.length / 3;
@@ -1074,11 +1074,14 @@ export function generateRealisticFemaleScene(
     if (hairVertIndices.has(oldIdx)) {
       bodyColors.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
     } else if (eyebrowVertIndices.has(oldIdx)) {
-      // Natural feminine eyebrow: eliminate medial unibrow bridge (x < 0.017)
-      if (Math.abs(px) < 0.017) {
+      // Natural feminine eyebrow: eliminate medial unibrow bridge (x < 0.019) with soft feathering
+      const absX = Math.abs(px);
+      if (absX < 0.019 || absX > 0.054) {
         bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
       } else {
-        bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
+        const t = Math.sin(((absX - 0.019) / (0.054 - 0.019)) * Math.PI);
+        const curBrow = skinColorObj.clone().lerp(browColorObj, t * 0.82);
+        bodyColors.push(curBrow.r, curBrow.g, curBrow.b);
       }
     } else if (eyeVertIndices.has(oldIdx)) {
       // High-Fidelity Anatomical Eye Shading: pupil, specular catchlight, iris, limbal ring, sclera, and eyelid cast shadow
