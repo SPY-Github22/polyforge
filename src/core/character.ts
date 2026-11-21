@@ -325,10 +325,6 @@ export function generateRealisticHumanScene(
   if (remapCrown !== undefined && remapCrown < normAttr.count) {
     normAttr.setXYZ(remapCrown, 0, 1.0, 0);
   }
-  const remapChin = bodyRemap.get(chinApexIdx);
-  if (remapChin !== undefined && remapChin < normAttr.count) {
-    normAttr.setXYZ(remapChin, 0, -1.0, 0);
-  }
 
   const finalBodyPositions = Array.from(bodyGeo.getAttribute('position').array as Float32Array);
   const finalBodyNormals = Array.from(normAttr.array as Float32Array);
@@ -723,81 +719,110 @@ export function generateRealisticFemaleScene(
       z *= 0.92;
     }
 
-    // 6. Feminine Facial Harmony: Soft youthful cheeks, gentle tapered jawline, refined chin
-    if (y >= 1.44 && y <= 1.62) {
+    // 6. Ultra-Realistic Feminine Facial Morphology (Youthful, harmonious, beautiful)
+    if (y >= 1.44 && y <= 1.64) {
+      // 6a. Gentle tapered jawline & soft rounded feminine chin
       if (y < 1.49) {
-        // Soft rounded chin and smooth tapered jawline (gentle 5% taper, zero hollows)
-        x *= 0.95;
-        z *= 0.97;
+        x *= 0.94;
+        z *= 0.96;
       } else if (y < 1.53) {
-        // Smooth transition to midface
-        x *= 0.96;
+        x *= 0.95;
       }
-      // Cheeks and zygomatic arches (y in [1.50, 1.57]):
-      // Youthful, soft feminine cheek volume - smooth convex curve, avoiding gaunt hollows
-      if (y >= 1.50 && y <= 1.57 && z > 0.04) {
-        const cheekFactor = Math.sin(((y - 1.50) / 0.07) * Math.PI);
-        z += 0.0035 * cheekFactor;
-      }
-      // Fill nasolabial crease / fold to eliminate harsh aged hollows around the mouth
-      if (y >= 1.47 && y <= 1.53 && absX >= 0.015 && absX <= 0.038 && z > 0.042) {
-        const nFactor = Math.sin(((y - 1.47) / 0.06) * Math.PI);
-        z += 0.0045 * nFactor;
-      }
-    }
 
-    // 6b. Eye & Brow Orbit Refinement: Soften brow overhang, fill under-eye hollows, illuminate eyes
-    if (y >= 1.52 && y <= 1.63 && z > 0.038) {
-      // Soften heavy brow overhang (y in [1.57, 1.63])
-      if (y >= 1.57 && y <= 1.63 && absX < 0.05) {
-        z -= 0.006;
+      // 6b. Soft feminine cheek volume & zygomatic curve (convex apple of the cheek)
+      if (y >= 1.49 && y <= 1.57 && absX >= 0.025 && absX <= 0.065 && z > 0.038) {
+        const uX = Math.sin(((absX - 0.025) / 0.040) * Math.PI);
+        const uY = Math.sin(((y - 1.49) / 0.08) * Math.PI);
+        z += 0.0055 * uX * uY;
       }
-      // Fill infraorbital tear-trough hollows to eliminate dark demonic eye-bag shadows
-      if (y >= 1.525 && y <= 1.560 && absX >= 0.015 && absX <= 0.045 && z > 0.038) {
-        z += 0.0055;
-      }
-      // Bring eye sphere forward to catch natural catchlight reflection
-      if (y >= 1.545 && y <= 1.575 && absX >= 0.018 && absX <= 0.040) {
-        z += 0.005;
-      }
-    }
 
-    // 6c. Natural Vermilion Lip Fullness
-    if (y >= 1.475 && y <= 1.515 && absX < 0.025 && z > 0.048) {
-      z += 0.0035;
-    }
-
-    // 7. Feminine Shoulder-Length Contoured Layered Hair (short01 verts: 7990..10973)
-    if (i >= 7990 && i <= 10973) {
-      // Crown & temple volume
-      x *= 1.04;
-      if (z < 0) {
-        z *= 1.05;
+      // 6c. Total eradication of nasolabial creases and mouth grooves (flawless smooth midface)
+      if (y >= 1.465 && y <= 1.540 && absX >= 0.012 && absX <= 0.046 && z > 0.040) {
+        const targetZ = 0.0495 + (y - 1.465) * 0.045 - (absX - 0.012) * 0.08;
+        if (z < targetZ) {
+          z = targetZ;
+        }
       }
-      // Draping sides (absX > 0.04) and back (z < 0.01) down past the jawline and nape
-      if (absX > 0.04 || z < 0.01) {
-        if (y < 1.63) {
-          const drop = (1.63 - y) * 0.85;
-          y -= drop;
-          x *= (1.0 + drop * 0.22);
-          if (z < 0) {
-            z *= (1.0 + drop * 0.18);
+
+      // 6d. Smooth feminine forehead & complete elimination of heavy brow overhang
+      if (y >= 1.565 && y <= 1.640 && z > 0.035) {
+        if (y >= 1.575 && y <= 1.625 && absX < 0.052) {
+          // Flatten heavy male supraorbital torus flush with forehead
+          const browMaxZ = 0.0470 + (y - 1.575) * 0.030;
+          if (z > browMaxZ) {
+            z = browMaxZ;
           }
         }
       }
-      // Forehead framing
+
+      // 6e. Natural upper eyelid drape & smooth infraorbital under-eye fill
+      if (y >= 1.520 && y <= 1.575 && absX >= 0.014 && absX <= 0.044 && z > 0.036) {
+        // Fill infraorbital tear-trough hollows seamlessly into cheeks (zero eye-bags)
+        if (y <= 1.554) {
+          const smoothUnderZ = 0.0465 + (y - 1.520) * 0.055;
+          if (z < smoothUnderZ) {
+            z = smoothUnderZ;
+          }
+        }
+        // Soft upper eyelid margin fold
+        if (y >= 1.562 && y <= 1.572) {
+          const lidFactor = Math.sin(((y - 1.562) / 0.010) * Math.PI);
+          z += 0.0025 * lidFactor;
+        }
+      }
+
+      // 6f. Sculpted vermilion lips: defined Cupid's bow and plump lower cushion
+      if (absX < 0.025 && y >= 1.475 && y <= 1.515 && z > 0.044) {
+        // Upper lip Cupid's bow peaks at |x| = 0.007
+        if (y >= 1.492) {
+          const bowFactor = Math.cos(((Math.min(0.015, Math.abs(absX - 0.007))) / 0.015) * (Math.PI / 2));
+          z += 0.0035 * bowFactor;
+        } else {
+          // Lower lip plump cushion
+          const lowerFactor = Math.cos((absX / 0.018) * (Math.PI / 2)) * Math.sin(((y - 1.475) / 0.017) * Math.PI);
+          z += 0.0045 * Math.max(0, lowerFactor);
+        }
+        // Relax mouth corners gently upward (+0.002m) for warm approachable expression
+        if (absX >= 0.016 && absX <= 0.024 && y >= 1.488 && y <= 1.498) {
+          y += 0.0022;
+        }
+      }
+    }
+
+    // 7. Feminine Shoulder-Length Contoured Layered Hair (Smooth continuous, zero mohawk tearing)
+    if (i >= 7990 && i <= 10973) {
+      // Natural cranial volumetric body (subtle 5% radial expansion from cranium center)
+      const headCenterY = 1.58;
+      const headCenterZ = -0.02;
+      const radHead = Math.hypot(x, y - headCenterY, z - headCenterZ);
+      if (radHead > 0.04) {
+        const exp = 1.0 + 0.004 / radHead;
+        x *= exp;
+        if (z < 0) z *= exp;
+      }
+
+      // Smooth continuous layered drape (zero step discontinuities)
+      if (y < 1.64) {
+        const drapeDist = (1.64 - y);
+        y -= drapeDist * 0.32;
+        x *= (1.0 + drapeDist * 0.14);
+        if (z < 0) {
+          z *= (1.0 + drapeDist * 0.12);
+        }
+      }
+
+      // Gentle temple and forehead framing
       if (z > 0.03 && y >= 1.54 && y <= 1.62) {
-        y -= 0.005;
-        z += 0.004;
+        z += 0.003;
       }
     }
 
     // 8. Delicate Feminine Eyebrow Contouring (verts 11070..11193)
     if (i >= 11070 && i <= 11193) {
-      const browCenterY = 1.568;
-      y = browCenterY + (y - browCenterY) * 0.55;
-      if (absX > 0.024 && absX < 0.052) {
-        y += 0.0035 * Math.sin(((absX - 0.024) / 0.028) * Math.PI);
+      const browCenterY = 1.572;
+      y = browCenterY + (y - browCenterY) * 0.50;
+      if (absX > 0.022 && absX < 0.052) {
+        y += 0.0030 * Math.sin(((absX - 0.022) / 0.030) * Math.PI);
       }
     }
 
@@ -856,24 +881,114 @@ export function generateRealisticFemaleScene(
   }
 
   // Hair, Eyebrows, Eyes, Teeth, and Tongue geometry
-  const hairQuads = decodeUint16(HAIR_QUADS_B64);
+  // For female character: generate an ultra-realistic, volumetric feminine layered hairstyle & athletic ponytail
+  const hairVertIndices = new Set<number>();
+
+  // 1. Conformal Volumetric Cranial Hair Cap (covering forehead, temples, crown, occiput, and nape)
+  const hairCx = 0, hairCy = 1.572, hairCz = -0.018;
+  const nRings = 18;
+  const nSegs = 28;
+  const hairCapStartIdx = allPos.length / 3;
+
+  for (let r = 0; r <= nRings; r++) {
+    const ringT = r / nRings;
+
+    for (let s = 0; s < nSegs; s++) {
+      const phi = (s / nSegs) * Math.PI * 2;
+      const sinP = Math.sin(phi); // +Z is front, -Z is back
+      const cosP = Math.cos(phi); // lateral X
+
+      // Conformal hairline: natural forehead height in front (y ~ 1.608m), temple/ear curve (y ~ 1.558m), nape in back (y ~ 1.514m)
+      const thetaMax = 1.74 - 0.61 * sinP;
+      const theta = ringT * thetaMax;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
+
+      const rx = 0.084;
+      const ry = 0.090;
+      const rz = sinP > 0 ? 0.098 : 0.090;
+
+      // Volumetric body conforming to skull
+      let vol = 0.007;
+      if (sinP > 0.25 && ringT > 0.9) {
+        vol = 0.002; // Clean feathered edge at forehead hairline
+      }
+      if (cosT > 0.65) {
+        vol = 0.012; // Crown volume
+      }
+
+      // Natural side tresses framing temples and cheeks
+      let drapeY = 0;
+      if (Math.abs(cosP) > 0.65 && sinP > -0.2 && ringT > 0.8) {
+        drapeY = -0.025 * (ringT - 0.8) * 5;
+      }
+
+      const px = hairCx + (rx + vol) * sinT * cosP;
+      const py = hairCy + (ry + vol) * cosT + drapeY;
+      const pz = hairCz + (rz + vol) * sinT * sinP;
+
+      const vIdx = allPos.length / 3;
+      allPos.push(px, py, pz);
+      hairVertIndices.add(vIdx);
+    }
+  }
+
+  // Connect hair cap quads into triangles
+  for (let r = 0; r < nRings; r++) {
+    for (let s = 0; s < nSegs; s++) {
+      const nextS = (s + 1) % nSegs;
+      const i0 = hairCapStartIdx + r * nSegs + s;
+      const i1 = hairCapStartIdx + r * nSegs + nextS;
+      const i2 = hairCapStartIdx + (r + 1) * nSegs + nextS;
+      const i3 = hairCapStartIdx + (r + 1) * nSegs + s;
+      bodyTriangles.push(i0, i1, i2, i0, i2, i3);
+    }
+  }
+
+  // 2. Athletic Sleek Ponytail / Cascade flowing down the back
+  const ponyStartIdx = allPos.length / 3;
+  const ponyRings = 14;
+  const ponySegs = 16;
+  const ponyRoot = new THREE.Vector3(0, 1.558, -0.092);
+  const ponyTip = new THREE.Vector3(0, 1.360, -0.110);
+
+  for (let r = 0; r <= ponyRings; r++) {
+    const t = r / ponyRings;
+    const curCenter = new THREE.Vector3().lerpVectors(ponyRoot, ponyTip, t);
+    // Natural subtle S-curve flow
+    curCenter.z += Math.sin(t * Math.PI) * -0.018;
+
+    // Taper radius from 0.022m at root down to 0.008m at tip
+    const curRad = 0.022 * (1.0 - t * 0.65);
+
+    for (let s = 0; s < ponySegs; s++) {
+      const angle = (s / ponySegs) * Math.PI * 2;
+      const px = curCenter.x + Math.cos(angle) * curRad;
+      const py = curCenter.y + Math.sin(angle) * curRad * 0.4;
+      const pz = curCenter.z + Math.sin(angle) * curRad;
+
+      const vIdx = allPos.length / 3;
+      allPos.push(px, py, pz);
+      hairVertIndices.add(vIdx);
+    }
+  }
+
+  for (let r = 0; r < ponyRings; r++) {
+    for (let s = 0; s < ponySegs; s++) {
+      const nextS = (s + 1) % ponySegs;
+      const i0 = ponyStartIdx + r * ponySegs + s;
+      const i1 = ponyStartIdx + r * ponySegs + nextS;
+      const i2 = ponyStartIdx + (r + 1) * ponySegs + nextS;
+      const i3 = ponyStartIdx + (r + 1) * ponySegs + s;
+      bodyTriangles.push(i0, i1, i2, i0, i2, i3);
+    }
+  }
+
+  // 3. Eyebrows, Eyes, Teeth, and Tongue geometry
   const eyebrowQuads = decodeUint16(EYEBROW_QUADS_B64);
   const eyeQuads = decodeUint16(EYE_QUADS_B64);
   const teethQuads = decodeUint16(TEETH_QUADS_B64);
   const tongueQuads = decodeUint16(TONGUE_QUADS_B64);
-
-  const hairVertIndices = new Set<number>();
-  for (let i = 0; i < hairQuads.length; i += 4) {
-    const v0 = hairQuads[i];
-    const v1 = hairQuads[i + 1];
-    const v2 = hairQuads[i + 2];
-    const v3 = hairQuads[i + 3];
-    hairVertIndices.add(v0);
-    hairVertIndices.add(v1);
-    hairVertIndices.add(v2);
-    hairVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
-  }
 
   const eyebrowVertIndices = new Set<number>();
   for (let i = 0; i < eyebrowQuads.length; i += 4) {
@@ -919,7 +1034,7 @@ export function generateRealisticFemaleScene(
     bodyTriangles.push(tongueQuads[i], tongueQuads[i + 1], tongueQuads[i + 2], tongueQuads[i], tongueQuads[i + 2], tongueQuads[i + 3]);
   }
 
-  // Watkins cranium vault crown cap vertex at y = 1.660m, chin apex cap at y = 1.455m
+  // Watkins cranium vault crown cap vertex at y = 1.660m
   const crownApexIdx = allPos.length / 3;
   allPos.push(0.000, 1.660, -0.013);
   const crownB1 = allPos.length / 3;
@@ -927,14 +1042,6 @@ export function generateRealisticFemaleScene(
   const crownB2 = allPos.length / 3;
   allPos.push(0.001, 1.659, -0.014);
   bodyTriangles.push(crownApexIdx, crownB1, crownB2);
-
-  const chinApexIdx = allPos.length / 3;
-  allPos.push(0.000, 1.455, 0.011);
-  const chinB1 = allPos.length / 3;
-  allPos.push(0.001, 1.456, 0.012);
-  const chinB2 = allPos.length / 3;
-  allPos.push(-0.001, 1.456, 0.012);
-  bodyTriangles.push(chinApexIdx, chinB1, chinB2);
 
   // Remap unique vertices for compact BufferGeometry
   const bodyUniqueVerts = Array.from(new Set(bodyTriangles));
@@ -944,12 +1051,17 @@ export function generateRealisticFemaleScene(
 
   const skinColorObj = new THREE.Color(skinColor);
   const hairColorObj = new THREE.Color(hairColor);
-  const browColorObj = new THREE.Color(hairColor).lerp(skinColorObj, 0.22);
-  const scleraColorObj = new THREE.Color('#f4f4f7');
-  const irisColorObj = new THREE.Color('#221712');
+  const browColorObj = new THREE.Color('#2b1912'); // Deep natural brunette eyebrow
+  const scleraColorObj = new THREE.Color('#f0edf2');
+  const scleraCornerColorObj = new THREE.Color('#e8c6c3');
+  const irisCoreColorObj = new THREE.Color('#382014');
+  const irisOuterColorObj = new THREE.Color('#663e24');
+  const limbalRingColorObj = new THREE.Color('#140c08');
+  const pupilColorObj = new THREE.Color('#0a080a');
+  const blushColorObj = new THREE.Color('#d98075');
   const teethColorObj = new THREE.Color('#fcfcfd');
   const tongueColorObj = new THREE.Color('#cf606e');
-  const lipColorObj = new THREE.Color(skinColor).lerp(new THREE.Color('#d94862'), 0.48);
+  const lipColorObj = new THREE.Color('#b8384e'); // Rich natural rose-red vermilion
 
   for (let i = 0; i < bodyUniqueVerts.length; i++) {
     const oldIdx = bodyUniqueVerts[i];
@@ -962,30 +1074,78 @@ export function generateRealisticFemaleScene(
     if (hairVertIndices.has(oldIdx)) {
       bodyColors.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
     } else if (eyebrowVertIndices.has(oldIdx)) {
-      bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
-    } else if (eyeVertIndices.has(oldIdx)) {
-      const eyeDist = Math.hypot(Math.abs(px) - 0.0268, py - 1.5604);
-      if (eyeDist < 0.0028 && pz > 0.048) {
-        bodyColors.push(0.04, 0.04, 0.05);
-      } else if (eyeDist < 0.0068 && pz > 0.048) {
-        bodyColors.push(irisColorObj.r, irisColorObj.g, irisColorObj.b);
+      // Natural feminine eyebrow: eliminate medial unibrow bridge (x < 0.017)
+      if (Math.abs(px) < 0.017) {
+        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
       } else {
-        bodyColors.push(scleraColorObj.r, scleraColorObj.g, scleraColorObj.b);
+        bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
+      }
+    } else if (eyeVertIndices.has(oldIdx)) {
+      // High-Fidelity Anatomical Eye Shading: pupil, specular catchlight, iris, limbal ring, sclera, and eyelid cast shadow
+      const eyeCenterX = Math.abs(px) - 0.0275;
+      const eyeCenterY = py - 1.5604;
+      const eyeDist = Math.hypot(eyeCenterX, eyeCenterY);
+
+      // Specular catchlight highlight on front-upper pupil margin
+      const specDist = Math.hypot(Math.abs(px) - 0.0264, py - 1.5624);
+      if (specDist < 0.0016 && pz > 0.051) {
+        bodyColors.push(1.0, 1.0, 1.0); // Radiant lively catchlight
+      } else if (eyeDist < 0.0036 && pz > 0.046) {
+        bodyColors.push(pupilColorObj.r, pupilColorObj.g, pupilColorObj.b); // Deep obsidian pupil
+      } else if (eyeDist < 0.0084 && pz > 0.044) {
+        // Multi-tone iris gradient
+        const irisT = Math.max(0, Math.min(1, (eyeDist - 0.0036) / (0.0084 - 0.0036)));
+        const curIris = irisCoreColorObj.clone().lerp(irisOuterColorObj, irisT);
+        bodyColors.push(curIris.r, curIris.g, curIris.b);
+      } else if (eyeDist < 0.0094 && pz > 0.042) {
+        // Soft dark limbal ring (adds youthful depth and definition)
+        bodyColors.push(limbalRingColorObj.r, limbalRingColorObj.g, limbalRingColorObj.b);
+      } else {
+        // Natural sclera with soft corner warmth
+        const cornerFactor = Math.min(1.0, Math.abs(eyeCenterX) / 0.015);
+        let curSclera = scleraColorObj.clone().lerp(scleraCornerColorObj, cornerFactor * 0.45);
+        // Soft upper eyelid cast shadow across top of eyeball (eliminates demonic staring look)
+        if (py > 1.5600) {
+          const shadowT = Math.min(1.0, (py - 1.5600) / 0.0120);
+          curSclera = curSclera.lerp(new THREE.Color('#584b47'), shadowT * 0.58);
+        }
+        bodyColors.push(curSclera.r, curSclera.g, curSclera.b);
       }
     } else if (teethVertIndices.has(oldIdx)) {
       bodyColors.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
     } else if (tongueVertIndices.has(oldIdx)) {
       bodyColors.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
     } else {
-      const lipX = Math.abs(px) / 0.0175;
-      const lipY = Math.abs(py - 1.493) / 0.009;
-      const lipDistSq = lipX * lipX + lipY * lipY;
-      if (lipDistSq < 1.0 && pz > 0.046) {
-        const lipAlpha = Math.max(0, 1.0 - lipDistSq);
-        const blendedLip = skinColorObj.clone().lerp(lipColorObj, 0.25 + 0.55 * lipAlpha);
-        bodyColors.push(blendedLip.r, blendedLip.g, blendedLip.b);
-      } else {
-        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+      // Facial skin shading: soft cheek blush, sculpted lips, and scalp protection
+      const absPx = Math.abs(px);
+
+      // Scalp shading under hair to prevent any visible pale skin
+      if ((py >= 1.60 && pz < 0.046) || py >= 1.635 || (py > 1.55 && pz < 0.025)) {
+        bodyColors.push(hairColorObj.r * 0.7, hairColorObj.g * 0.7, hairColorObj.b * 0.7);
+      }
+      // Sculpted vermilion lips with soft gradient
+      else {
+        const lipX = absPx / 0.0185;
+        const lipY = Math.abs(py - 1.492) / 0.011;
+        const lipDistSq = lipX * lipX + lipY * lipY;
+        if (lipDistSq < 1.0 && pz > 0.045) {
+          const lipAlpha = Math.max(0, 1.0 - lipDistSq);
+          const curLip = skinColorObj.clone().lerp(lipColorObj, 0.45 + 0.50 * lipAlpha);
+          bodyColors.push(curLip.r, curLip.g, curLip.b);
+        }
+        // Soft peach-rose blush on cheekbones (healthy youthful glow)
+        else if (absPx >= 0.026 && absPx <= 0.055 && py >= 1.505 && py <= 1.545 && pz > 0.041) {
+          const blushDist = Math.hypot((absPx - 0.040) / 0.015, (py - 1.525) / 0.020);
+          if (blushDist < 1.0) {
+            const bAlpha = (1.0 - blushDist) * 0.22;
+            const blushed = skinColorObj.clone().lerp(blushColorObj, bAlpha);
+            bodyColors.push(blushed.r, blushed.g, blushed.b);
+          } else {
+            bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+          }
+        } else {
+          bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+        }
       }
     }
   }
@@ -1007,10 +1167,6 @@ export function generateRealisticFemaleScene(
   const remapCrown = bodyRemap.get(crownApexIdx);
   if (remapCrown !== undefined && remapCrown < normAttr.count) {
     normAttr.setXYZ(remapCrown, 0, 1.0, 0);
-  }
-  const remapChin = bodyRemap.get(chinApexIdx);
-  if (remapChin !== undefined && remapChin < normAttr.count) {
-    normAttr.setXYZ(remapChin, 0, -1.0, 0);
   }
 
   const finalBodyPositions = Array.from(bodyGeo.getAttribute('position').array as Float32Array);
@@ -1080,16 +1236,25 @@ export function generateRealisticFemaleScene(
       let py = baseVerts[oldIdx * 3 + 1];
       let pz = baseVerts[oldIdx * 3 + 2];
 
-      // Tailor shirt hem to drape smoothly over jeans (eliminating gap and ragged sawtooth spikes)
+      // Tailor shirt: clean neckline, relaxed feminine shoulders, smooth hemline
       if (id === 'female-top') {
+        // Flatten upright collar points down towards clavicles
+        if (py >= 1.34 && py <= 1.45 && Math.abs(px) < 0.12 && pz > 0.02) {
+          py = 1.33 + (py - 1.34) * 0.45;
+          pz -= 0.006;
+        }
+        // Relax masculine shoulder pads
+        if (py >= 1.28 && py <= 1.38 && Math.abs(px) > 0.14) {
+          py -= 0.012;
+        }
+        // Neat hem welt overlapping jeans waistband
         if (py < 0.965 && Math.abs(px) < 0.22) {
           if (py < 0.942) {
             py = 0.938;
           }
-          // Soft radial folded hem welt (+0.0035m radial expansion)
           const rad = Math.hypot(px, pz);
           if (rad > 0.05) {
-            const exp = 1.0 + 0.0035 / rad;
+            const exp = 1.0 + 0.0045 / rad;
             px *= exp;
             pz *= exp;
           }
@@ -1100,10 +1265,22 @@ export function generateRealisticFemaleScene(
         }
       }
 
-      // Jeans waistband extension to guarantee smooth 2.4cm overlap under shirt
+      // Jeans: seamless pelvic seat & 100% gluteal coverage (zero butt cutout or skin poke-through)
       if (id === 'female-jeans') {
         if (py > 0.952 && Math.abs(px) < 0.22) {
-          py = 0.960;
+          py = 0.962;
+        }
+        // Expand gluteals backward and radially to guarantee complete enclosure over skin
+        if (py >= 0.70 && py <= 0.96) {
+          if (pz < 0) {
+            pz -= 0.007; // 7mm posterior expansion
+          }
+          const rad = Math.hypot(px, pz);
+          if (rad > 0.05) {
+            const exp = 1.0 + 0.005 / rad;
+            px *= exp;
+            pz *= exp;
+          }
         }
       }
 
