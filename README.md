@@ -130,6 +130,35 @@ npm run polyforge-mcp
 | `procedural-biome`| Low-Poly Pine Forest | Nature | Undulating terrain grid, stylized multi-tiered pine trees with wind sway, and monoliths |
 | `spiral-pavilion` | Parametric Spiral Pavilion | Architecture | Helical marble staircase, golden cupola dome, and ascending kinetic platform |
 | `realistic-bicycle` | Realistic Road Bicycle | Mechanical | Diamond frame, drop handlebars, 32-spoke laced wheels, 11-speed drivetrain, roller chain, disc brakes, and cables |
+| `realistic-female` | Realistic Anatomical Female | Character | Feminine morphology (~1.68m), contoured face, layered hair with ponytail, fitted streetwear top, high-waisted jeans |
+| `animated-cyclist` | Animated Cyclist Circuit | Kinetics | Dynamic 2-bone analytical IK pedaling, cadence sway, wheel spin, and 360-frame closed-circuit trajectory |
+
+### 6. 🧠 How LLMs & Autonomous Agents Work in PolyForge: Philosophy & Architecture
+
+A foundational question when exploring PolyForge is: **"How do LLMs actually create 3D models here? Is it fixed or restricted, or do LLMs freely create and customize anything using actions?"**
+
+#### 1. Not a Black-Box 3D Generator, But an Open Action Space
+PolyForge does **not** rely on black-box neural mesh generators that output distorted, uneditable, non-manifold polygon blobs. Instead, PolyForge treats 3D creation as **computational architecture driven by a composable Action Space**.
+
+An LLM connected to PolyForge (via the in-browser AI Studio, headless CLI, or Model Context Protocol) acts as a **3D Architect, Math Programmer, and Kinematic Animator**:
+1. **Scene Introspection**: The LLM queries the live scene graph, inspecting existing objects, hierarchies, materials, and animation tracks.
+2. **Action Synthesis**: The LLM writes executable JavaScript code or invokes tools from the strongly-typed `polyforge.*` Action Space.
+3. **Execution Sandbox**: The browser runtime executes the synthesized script in real-time, constructing Three.js BufferGeometry, applying procedural PBR shaders, configuring keyframes, or evaluating inverse kinematics solvers.
+
+#### 2. The Granularity of the Action Space
+The creative capabilities of an LLM in PolyForge are **unbounded** because the action space spans multiple abstraction layers:
+
+- **Atomic Primitives**: `polyforge.createObject({ primitive: 'box' | 'sphere' | 'cylinder' | 'torus' | ... })` with precise dimensions, PBR materials (roughness, metalness, transmission, emissive), and transforms.
+- **Custom Mathematical Vertex Synthesis**: `polyforge.createCustomMesh({ positions, normals, uvs, indices })` gives LLMs the power to write algorithmic mathematics: Archimedean spirals, parametric mobius strips, spline curves, and custom meshes.
+- **Procedural Modifiers**: `polyforge.noiseDisplace()`, `polyforge.subdivide()`, `polyforge.axialTwist()`, and `polyforge.axialTaper()` to sculpt and deform geometry programmatically.
+- **Kinematic Animation & Time Solvers**: `polyforge.recordKeyframe()`, `polyforge.addKeyframe()`, and trajectory solvers for vehicle dynamics, planetary orbits, and pedaling cadence.
+- **High-Level Generative Macro Actions**: Domain-specific synthesis engines such as `polyforge.createBicycle()`, `polyforge.createHuman()`, `polyforge.createFemaleHuman()`, and `polyforge.createAnimatedCyclist()`.
+
+#### 3. How Models Are Built: The "Action Expansion" Flywheel
+Every advanced model in PolyForge—from the ISO 4210 road bicycle to the botanical oak tree, human anatomy, and animated pedaling cyclist—is built upon this exact principle:
+- When we implemented **analytical 2-bone Inverse Kinematics (`solveLegIK`)**, the engine and all connected LLMs gained the native ability to articulately pose and animate pedaling limbs in 1:1 sync with a crankset.
+- When we engineered **spline-based limb lofting and phototropic branching**, LLMs gained the ability to generate procedural forests and botanical biomes.
+- **As we continue adding more actions to PolyForge, the expressive vocabulary of every connected LLM expands exponentially.** An LLM can parameterize dimensions, customize materials, hide or strip individual components, swap drop handlebars for bullhorn bars, pose characters, and combine actions in ways the engine creators never anticipated.
 
 ---
 
