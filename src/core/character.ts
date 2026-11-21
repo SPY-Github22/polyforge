@@ -687,27 +687,27 @@ export function generateRealisticHumanScene(
 
   // --- Anatomically Sculpted Cranium, Jawline, & Facial Mesh ---
   // Smoothly lofted domed cranial hemisphere (rx = 0.082, ry = 0.098, rz = 0.095)
-  // Continuous jawline transitioning into mandibular arches and sealed neck.
+  // Continuous jawline transitioning organically into neck and clavicular base.
   const cranialFaceKeyRings: LoftRing[] = [
-    // 1. Crown of head (vertex cap, highest point y = 1.760, normal pointing +y)
-    { center: new THREE.Vector3(0, 1.760, -0.015), rx: 0.015, rz: 0.018 },
+    // 1. Crown apex cap (highest point y = 1.760, normal pointing +y)
+    { center: new THREE.Vector3(0, 1.760, -0.015), rx: 0.020, rz: 0.024 },
     // 2. Superior cranial vault (lofting domed hemisphere rx=0.082, ry=0.098, rz=0.095)
-    { center: new THREE.Vector3(0, 1.748, -0.015), rx: 0.040, rz: 0.048 },
+    { center: new THREE.Vector3(0, 1.748, -0.015), rx: 0.048, rz: 0.056 },
     // 3. Parietal eminence / upper cranial curve
-    { center: new THREE.Vector3(0, 1.730, -0.014), rx: 0.060, rz: 0.070 },
+    { center: new THREE.Vector3(0, 1.730, -0.014), rx: 0.068, rz: 0.078 },
     // 4. Upper forehead / frontal squama
-    { center: new THREE.Vector3(0, 1.705, -0.012), rx: 0.074, rz: 0.086 },
+    { center: new THREE.Vector3(0, 1.705, -0.012), rx: 0.078, rz: 0.088 },
     // 5. Brow ridge (superciliary arches & glabella)
-    { center: new THREE.Vector3(0, 1.675, -0.008), rx: 0.078, rz: 0.086, frontOffset: 0.004 },
+    { center: new THREE.Vector3(0, 1.675, -0.008), rx: 0.082, rz: 0.095, frontOffset: 0.004 },
     // 6. Recessed orbit plane & eye sockets
-    { center: new THREE.Vector3(0, 1.650, -0.006), rx: 0.074, rz: 0.078 },
+    { center: new THREE.Vector3(0, 1.650, -0.006), rx: 0.076, rz: 0.082 },
     // 7. Zygomatic arches (cheekbones) & mid-face
-    { center: new THREE.Vector3(0, 1.625, -0.004), rx: 0.070, rz: 0.072, frontOffset: 0.006 },
+    { center: new THREE.Vector3(0, 1.625, -0.004), rx: 0.070, rz: 0.074, frontOffset: 0.006 },
     // 8. Subnasale & upper maxilla base
     { center: new THREE.Vector3(0, 1.602, -0.002), rx: 0.062, rz: 0.066, frontOffset: 0.006 },
     // 9. Mouth & upper jaw / philtrum
     { center: new THREE.Vector3(0, 1.580, 0.004), rx: 0.052, rz: 0.060, frontOffset: 0.006 },
-    // 10. Mentolabial sulcus & lower jaw arch
+    // 10. Mentolabial sulcus & curved mandibular jaw arch
     { center: new THREE.Vector3(0, 1.560, 0.008), rx: 0.044, rz: 0.052 },
     // 11. Chin apex (downward vertex cap at y = 1.542, meeting neck loft cleanly)
     { center: new THREE.Vector3(0, 1.542, 0.012), rx: 0.030, rz: 0.038, frontOffset: 0.008 },
@@ -799,12 +799,12 @@ export function generateRealisticHumanScene(
   }
 
   // Streamlined Anatomical Nose: Dorsal bridge, supratip break, apex lobule, and alar wings
-  // Protrudes forward from face plane (z = 0.072 to 0.100m)
+  // Protrudes forward from face plane (z = 0.072 to 0.090m)
   addCylinder(
     new THREE.Vector3(0, 1.660, 0.072), // Root at brow
-    new THREE.Vector3(0, 1.616, 0.090), // Dorsal apex
-    0.0052,
-    0.0072,
+    new THREE.Vector3(0, 1.616, 0.088), // Dorsal apex
+    0.0048,
+    0.0068,
     16,
     bodyBuf,
     true,
@@ -813,10 +813,10 @@ export function generateRealisticHumanScene(
   );
   // Nose tip lobule (apex)
   addEllipsoid(
-    new THREE.Vector3(0, 1.614, 0.092),
-    0.0080,
-    0.0070,
-    0.0082,
+    new THREE.Vector3(0, 1.614, 0.089),
+    0.0075,
+    0.0065,
+    0.0075,
     20,
     16,
     bodyBuf,
@@ -825,20 +825,21 @@ export function generateRealisticHumanScene(
   // Alar base / nostril flares & apertures
   for (const side of [1, -1]) {
     addEllipsoid(
-      new THREE.Vector3(side * 0.011, 1.610, 0.080),
+      new THREE.Vector3(side * 0.010, 1.610, 0.078),
+      0.0050,
+      0.0040,
       0.0055,
-      0.0045,
-      0.0065,
       16,
       12,
       bodyBuf,
       skinColorObj.clone().multiplyScalar(0.97)
     );
+    // Subnasal aperture facing down into nostril base
     addEllipsoid(
-      new THREE.Vector3(side * 0.006, 1.606, 0.082),
+      new THREE.Vector3(side * 0.005, 1.606, 0.078),
+      0.0020,
+      0.0014,
       0.0028,
-      0.0022,
-      0.0038,
       12,
       10,
       bodyBuf,
@@ -847,10 +848,10 @@ export function generateRealisticHumanScene(
   }
   // Columella tissue pillar separating nostrils
   addCylinder(
-    new THREE.Vector3(0, 1.606, 0.082),
-    new THREE.Vector3(0, 1.612, 0.088),
-    0.0028,
-    0.0028,
+    new THREE.Vector3(0, 1.606, 0.078),
+    new THREE.Vector3(0, 1.612, 0.085),
+    0.0024,
+    0.0024,
     10,
     bodyBuf,
     true,
@@ -862,10 +863,10 @@ export function generateRealisticHumanScene(
   // Philtrum column ridges
   for (const side of [1, -1]) {
     addCylinder(
-      new THREE.Vector3(side * 0.0038, 1.606, 0.076),
-      new THREE.Vector3(side * 0.0038, 1.585, 0.076),
-      0.0014,
-      0.0014,
+      new THREE.Vector3(side * 0.0035, 1.606, 0.073),
+      new THREE.Vector3(side * 0.0035, 1.585, 0.073),
+      0.0012,
+      0.0012,
       8,
       bodyBuf,
       true,
@@ -875,20 +876,20 @@ export function generateRealisticHumanScene(
   }
   // Upper lip (Cupid's bow with central tubercle)
   addEllipsoid(
-    new THREE.Vector3(0, 1.583, 0.077),
-    0.018,
+    new THREE.Vector3(0, 1.583, 0.074),
+    0.016,
+    0.0042,
     0.0055,
-    0.0075,
     24,
     14,
     bodyBuf,
     vermilionLips
   );
   addEllipsoid(
-    new THREE.Vector3(0, 1.581, 0.080),
-    0.006,
+    new THREE.Vector3(0, 1.581, 0.076),
     0.0045,
-    0.005,
+    0.0035,
+    0.0035,
     14,
     10,
     bodyBuf,
@@ -896,10 +897,10 @@ export function generateRealisticHumanScene(
   );
   // Lower lip (fuller with natural cushion)
   addEllipsoid(
-    new THREE.Vector3(0, 1.571, 0.075),
-    0.017,
-    0.0065,
-    0.0085,
+    new THREE.Vector3(0, 1.572, 0.073),
+    0.015,
+    0.0052,
+    0.0060,
     24,
     14,
     bodyBuf,
@@ -907,10 +908,10 @@ export function generateRealisticHumanScene(
   );
   for (const side of [1, -1]) {
     addEllipsoid(
-      new THREE.Vector3(side * 0.007, 1.571, 0.076),
-      0.007,
+      new THREE.Vector3(side * 0.006, 1.572, 0.074),
       0.0055,
-      0.006,
+      0.0045,
+      0.0048,
       14,
       10,
       bodyBuf,
@@ -918,31 +919,17 @@ export function generateRealisticHumanScene(
     );
   }
 
-  // Chin pad prominence & curved mandibular arches (softened natural jawline)
+  // Chin pad prominence (softened natural chin)
   addEllipsoid(
-    new THREE.Vector3(0, 1.545, 0.052),
-    0.016,
-    0.012,
+    new THREE.Vector3(0, 1.545, 0.046),
     0.014,
+    0.010,
+    0.012,
     18,
     14,
     bodyBuf,
     skinColorObj.clone().multiplyScalar(0.99)
   );
-  // Curved mandibular arches bridging chin to jaw corners
-  for (const side of [1, -1]) {
-    addCylinder(
-      new THREE.Vector3(side * 0.016, 1.545, 0.046),
-      new THREE.Vector3(side * 0.056, 1.585, -0.002),
-      0.012,
-      0.014,
-      12,
-      bodyBuf,
-      true,
-      true,
-      skinColorObj.clone().multiplyScalar(0.98)
-    );
-  }
 
   // Anatomical Pinna & Ear Lobes (Helix, Antihelix, Tragus, Concha, Lobule)
   for (const side of [1, -1]) {
@@ -1021,15 +1008,15 @@ export function generateRealisticHumanScene(
   // 3. Modern styled layered locks:
   // Front hair fringe sweep: angled textured quiff lock conforming cleanly along hairline
   addEllipsoid(
-    new THREE.Vector3(0.010, 1.722, 0.062),
-    0.048,
-    0.016,
-    0.028,
+    new THREE.Vector3(0.008, 1.716, 0.048),
+    0.042,
+    0.012,
+    0.018,
     22,
     16,
     bodyBuf,
     hairColorObj,
-    new THREE.Euler(0.20, 0.08, -0.06)
+    new THREE.Euler(0.14, 0.06, -0.04)
   );
   // Parietal layered crown sweeps
   addEllipsoid(
@@ -1055,51 +1042,39 @@ export function generateRealisticHumanScene(
     new THREE.Euler(0.12, -0.10, 0.08)
   );
 
-  // Sideburn tapers
+  // Sideburn tapers conforming flush to skull
   for (const side of [1, -1]) {
-    addBox(
-      new THREE.Vector3(side * 0.076, 1.636, 0.005),
-      new THREE.Vector3(0.006, 0.026, 0.012),
-      new THREE.Euler(0, 0, 0),
+    addEllipsoid(
+      new THREE.Vector3(side * 0.074, 1.636, 0.004),
+      0.004,
+      0.015,
+      0.008,
+      14,
+      10,
       bodyBuf,
       hairColorObj
     );
   }
 
   // Cylindrical Neck Loft with Sternocleidomastoid taper and Thyroid prominence
-  // Continuous bridge from jawline & submental base (y=1.555) down to clavicular base (y=1.445)
+  // Continuous bridge from deep submental / jaw base (y=1.575) down to clavicular base (y=1.445)
   // ZERO floating gap between head and torso!
   const neckKeyRings: LoftRing[] = [
-    { center: new THREE.Vector3(0, 1.555, 0.008), rx: 0.042, rz: 0.050 },                      // Deep submental / Jaw junction
-    { center: new THREE.Vector3(0, 1.535, 0.008), rx: 0.046, rz: 0.054, frontOffset: 0.004 },  // Submental hyoid bridge
-    { center: new THREE.Vector3(0, 1.495, 0.004), rx: 0.052, rz: 0.058, frontOffset: 0.006 },  // Adam's apple (thyroid prominence)
-    { center: new THREE.Vector3(0, 1.465, -0.002), rx: 0.064, rz: 0.064 },                     // Lower cervical
-    { center: new THREE.Vector3(0, 1.445, -0.006), rx: 0.086, rz: 0.076 },                     // Clavicular base meeting torso
+    { center: new THREE.Vector3(0, 1.575, -0.005), rx: 0.038, rz: 0.044 },                      // Deep submental / Internal pharyngeal base inside skull
+    { center: new THREE.Vector3(0, 1.540, 0.002), rx: 0.042, rz: 0.048, frontOffset: 0.004 },   // Hyoid bridge under chin
+    { center: new THREE.Vector3(0, 1.495, 0.003), rx: 0.052, rz: 0.058, frontOffset: 0.006 },   // Adam's apple (thyroid prominence)
+    { center: new THREE.Vector3(0, 1.465, -0.002), rx: 0.066, rz: 0.066 },                      // Lower cervical
+    { center: new THREE.Vector3(0, 1.445, -0.006), rx: 0.088, rz: 0.078 },                      // Clavicular base meeting torso
   ];
   const neckRings = interpolateLoftRings(neckKeyRings, 4);
   addLoftRings(neckRings, 40, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.98));
 
-  // Sternocleidomastoid (SCM) lateral muscle pillars bridging mastoid to clavicles
-  for (const side of [1, -1]) {
-    addCylinder(
-      new THREE.Vector3(side * 0.048, 1.565, -0.008),
-      new THREE.Vector3(side * 0.024, 1.450, 0.026),
-      0.011,
-      0.013,
-      14,
-      bodyBuf,
-      true,
-      true,
-      skinColorObj.clone().multiplyScalar(0.98)
-    );
-  }
-
   // Submental soft tissue cushion sealing underside of chin to neck
   addEllipsoid(
-    new THREE.Vector3(0, 1.535, 0.028),
-    0.024,
-    0.014,
+    new THREE.Vector3(0, 1.536, 0.020),
     0.020,
+    0.012,
+    0.016,
     18,
     14,
     bodyBuf,
@@ -1127,8 +1102,8 @@ export function generateRealisticHumanScene(
   const armSides = [1, -1]; // 1 = Right, -1 = Left
   for (const side of armSides) {
     const shoulderX = side * 0.198;
-    // Deltoid cap smoothly integrating into shoulder yoke
-    addEllipsoid(new THREE.Vector3(shoulderX, 1.420, -0.008), 0.054, 0.060, 0.054, 24, 18, bodyBuf, skinColorObj);
+    // Deltoid cap smoothly integrating into shoulder yoke (enclosed within cloth shell)
+    addEllipsoid(new THREE.Vector3(shoulderX, 1.415, -0.008), 0.046, 0.042, 0.046, 24, 18, bodyBuf, skinColorObj);
 
     // Upper Arm (Brachium) lofted along a 13° outward abduction
     const upperArmKeyRings: LoftRing[] = [
@@ -1157,22 +1132,22 @@ export function generateRealisticHumanScene(
     addEllipsoid(new THREE.Vector3(side * 0.282, 0.880, 0.008), 0.007, 0.010, 0.007, 14, 10, bodyBuf, skinColorObj.clone().multiplyScalar(0.97));
 
     // --- Sculpted Articulated 5-Finger Hand in Natural Relaxed A-Pose ---
-    // Lofted anatomical palm (carpal base seamlessly transitioning into fingers without flat cut-off shelf)
+    // Broad anatomical palm (carpal base seamlessly transitioning into metacarpal arch)
     const palmKeyRings: LoftRing[] = [
-      { center: new THREE.Vector3(side * 0.290, 0.875, -0.007), rx: 0.026, rz: 0.022 },
-      { center: new THREE.Vector3(side * 0.294, 0.848, -0.006), rx: 0.027, rz: 0.021, frontOffset: 0.003 },
-      { center: new THREE.Vector3(side * 0.298, 0.825, -0.004), rx: 0.026, rz: 0.019 },
-      { center: new THREE.Vector3(side * 0.300, 0.812, -0.004), rx: 0.023, rz: 0.017 },
+      { center: new THREE.Vector3(side * 0.290, 0.875, -0.007), rx: 0.018, rz: 0.022 },
+      { center: new THREE.Vector3(side * 0.292, 0.850, -0.005), rx: 0.017, rz: 0.024, frontOffset: 0.002 },
+      { center: new THREE.Vector3(side * 0.294, 0.825, -0.003), rx: 0.016, rz: 0.026 },
+      { center: new THREE.Vector3(side * 0.296, 0.808, -0.002), rx: 0.015, rz: 0.026 },
     ];
     const palmRings = interpolateLoftRings(palmKeyRings, 4);
-    addLoftRings(palmRings, 28, bodyBuf, false, false, skinColorObj.clone().multiplyScalar(0.98));
+    addLoftRings(palmRings, 28, bodyBuf, false, true, skinColorObj.clone().multiplyScalar(0.98));
 
-    // Mid-palm dorsal/palmar bridging cushion (closes distal palm ring into metacarpal arch)
+    // Mid-palm dorsal/palmar bridging cushion
     addEllipsoid(
-      new THREE.Vector3(side * 0.298, 0.816, -0.004),
-      0.022,
+      new THREE.Vector3(side * 0.296, 0.812, -0.002),
       0.014,
-      0.018,
+      0.014,
+      0.024,
       18,
       14,
       bodyBuf,
@@ -1182,9 +1157,9 @@ export function generateRealisticHumanScene(
     // Muscular thenar eminence (prominent thumb pad cushion)
     addEllipsoid(
       new THREE.Vector3(side * 0.284, 0.840, 0.012),
-      0.015,
-      0.022,
-      0.015,
+      0.014,
+      0.020,
+      0.014,
       18,
       14,
       bodyBuf,
@@ -1192,7 +1167,7 @@ export function generateRealisticHumanScene(
     );
     // Hypothenar eminence (pinky pad cushion)
     addEllipsoid(
-      new THREE.Vector3(side * 0.306, 0.830, -0.010),
+      new THREE.Vector3(side * 0.300, 0.832, -0.010),
       0.012,
       0.018,
       0.012,
@@ -1202,109 +1177,62 @@ export function generateRealisticHumanScene(
       skinColorObj.clone().multiplyScalar(0.97)
     );
 
-    // 1. Abducted Opposed Thumb: 3 articulated segments curving naturally toward palm
-    // Metacarpophalangeal (MCP) knuckle
-    addEllipsoid(
-      new THREE.Vector3(side * 0.280, 0.835, 0.014),
-      0.0080,
-      0.0080,
-      0.0080,
-      14,
-      12,
-      bodyBuf,
-      skinColorObj.clone().multiplyScalar(0.97)
-    );
-    // Proximal phalanx
-    addCylinder(
-      new THREE.Vector3(side * 0.280, 0.835, 0.014),
-      new THREE.Vector3(side * 0.278, 0.805, 0.020),
-      0.0075,
-      0.0068,
-      14,
-      bodyBuf,
-      true,
-      true,
-      skinColorObj.clone().multiplyScalar(0.97)
-    );
-    // Interphalangeal (IP) knuckle joint
-    addEllipsoid(
-      new THREE.Vector3(side * 0.278, 0.805, 0.020),
-      0.0070,
-      0.0070,
-      0.0070,
-      14,
-      12,
-      bodyBuf,
-      skinColorObj.clone().multiplyScalar(0.96)
-    );
-    // Distal phalanx with rounded thumb pad pulp
-    addCylinder(
-      new THREE.Vector3(side * 0.278, 0.805, 0.020),
-      new THREE.Vector3(side * 0.282, 0.778, 0.014),
-      0.0065,
-      0.0055,
-      14,
-      bodyBuf,
-      true,
-      true,
-      skinColorObj.clone().multiplyScalar(0.96)
-    );
-    addEllipsoid(
-      new THREE.Vector3(side * 0.282, 0.778, 0.014),
-      0.0065,
-      0.0065,
-      0.0065,
-      14,
-      12,
-      bodyBuf,
-      skinColorObj.clone().multiplyScalar(0.96)
-    );
+    // 1. Abducted Opposed Thumb: 3 articulated segments curving naturally toward index
+    const thumbMcp = new THREE.Vector3(side * 0.278, 0.835, 0.016);
+    const thumbIp = new THREE.Vector3(side * 0.274, 0.806, 0.022);
+    const thumbTip = new THREE.Vector3(side * 0.278, 0.780, 0.018);
+
+    addEllipsoid(thumbMcp, 0.0090, 0.0090, 0.0090, 14, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.97));
+    addCylinder(thumbMcp, thumbIp, 0.0084, 0.0076, 14, bodyBuf, true, true, skinColorObj.clone().multiplyScalar(0.97));
+    addEllipsoid(thumbIp, 0.0080, 0.0080, 0.0080, 14, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
+    addCylinder(thumbIp, thumbTip, 0.0076, 0.0066, 14, bodyBuf, true, true, skinColorObj.clone().multiplyScalar(0.96));
+    addEllipsoid(thumbTip, 0.0072, 0.0072, 0.0072, 14, 12, bodyBuf, skinColorObj.clone().multiplyScalar(0.96));
     // Dorsal thumb nail plate
     addEllipsoid(
-      new THREE.Vector3(side * 0.283, 0.780, 0.010),
-      0.0050,
+      new THREE.Vector3(side * 0.280, 0.783, 0.013),
+      0.0055,
       0.0020,
-      0.0050,
+      0.0055,
       10,
       8,
       bodyBuf,
       skinColorObj.clone().multiplyScalar(1.05)
     );
 
-    // 4 Distinct Articulated Fingers in Relaxed Resting Posture:
+    // 4 Distinct Articulated Fingers in Relaxed Natural Resting Posture:
     // Knuckles form curved metacarpal arch; fingers softly cascade-curled toward medial palm
     const fingerDefs = [
       {
         name: 'index',
-        kX: side * 0.296, kY: 0.804, kZ: 0.012,
-        p1End: new THREE.Vector3(side * 0.292, 0.774, 0.015),
-        p2End: new THREE.Vector3(side * 0.288, 0.748, 0.016),
-        p3End: new THREE.Vector3(side * 0.285, 0.730, 0.012),
-        rad: 0.0055,
+        kX: side * 0.293, kY: 0.806, kZ: 0.015,
+        p1End: new THREE.Vector3(side * 0.290, 0.772, 0.018),
+        p2End: new THREE.Vector3(side * 0.286, 0.744, 0.016),
+        p3End: new THREE.Vector3(side * 0.282, 0.724, 0.012),
+        rad: 0.0080,
       },
       {
         name: 'middle',
-        kX: side * 0.301, kY: 0.800, kZ: 0.002,
-        p1End: new THREE.Vector3(side * 0.297, 0.768, 0.005),
-        p2End: new THREE.Vector3(side * 0.293, 0.740, 0.006),
-        p3End: new THREE.Vector3(side * 0.289, 0.720, 0.002),
-        rad: 0.0058,
+        kX: side * 0.297, kY: 0.804, kZ: 0.004,
+        p1End: new THREE.Vector3(side * 0.294, 0.766, 0.006),
+        p2End: new THREE.Vector3(side * 0.289, 0.736, 0.004),
+        p3End: new THREE.Vector3(side * 0.284, 0.714, 0.001),
+        rad: 0.0084,
       },
       {
         name: 'ring',
-        kX: side * 0.305, kY: 0.803, kZ: -0.008,
-        p1End: new THREE.Vector3(side * 0.301, 0.772, -0.006),
-        p2End: new THREE.Vector3(side * 0.296, 0.744, -0.005),
-        p3End: new THREE.Vector3(side * 0.292, 0.724, -0.008),
-        rad: 0.0054,
+        kX: side * 0.301, kY: 0.806, kZ: -0.006,
+        p1End: new THREE.Vector3(side * 0.298, 0.770, -0.005),
+        p2End: new THREE.Vector3(side * 0.293, 0.740, -0.006),
+        p3End: new THREE.Vector3(side * 0.287, 0.720, -0.008),
+        rad: 0.0078,
       },
       {
         name: 'pinky',
-        kX: side * 0.308, kY: 0.807, kZ: -0.017,
-        p1End: new THREE.Vector3(side * 0.304, 0.781, -0.016),
-        p2End: new THREE.Vector3(side * 0.300, 0.758, -0.016),
-        p3End: new THREE.Vector3(side * 0.296, 0.740, -0.019),
-        rad: 0.0048,
+        kX: side * 0.304, kY: 0.810, kZ: -0.016,
+        p1End: new THREE.Vector3(side * 0.301, 0.778, -0.015),
+        p2End: new THREE.Vector3(side * 0.297, 0.752, -0.015),
+        p3End: new THREE.Vector3(side * 0.292, 0.734, -0.016),
+        rad: 0.0068,
       },
     ];
 
@@ -1313,14 +1241,14 @@ export function generateRealisticHumanScene(
 
       // Metacarpal shaft bridging palm base to MCP knuckle
       const metacarpalBase = new THREE.Vector3(
-        side * 0.294 + (finger.kX - side * 0.294) * 0.60,
+        side * 0.292 + (finger.kX - side * 0.292) * 0.50,
         0.812,
-        finger.kZ * 0.65
+        finger.kZ * 0.80
       );
       addCylinder(
         metacarpalBase,
         knucklePos,
-        finger.rad * 1.20,
+        finger.rad * 1.15,
         finger.rad * 1.05,
         12,
         bodyBuf,
@@ -1332,9 +1260,9 @@ export function generateRealisticHumanScene(
       // Metacarpophalangeal (MCP) knuckle condyle
       addEllipsoid(
         knucklePos,
-        finger.rad * 1.15,
-        finger.rad * 1.15,
-        finger.rad * 1.15,
+        finger.rad * 1.12,
+        finger.rad * 1.12,
+        finger.rad * 1.12,
         14,
         12,
         bodyBuf,
@@ -1357,9 +1285,9 @@ export function generateRealisticHumanScene(
       // Proximal interphalangeal (PIP) joint
       addEllipsoid(
         finger.p1End,
-        finger.rad * 1.05,
-        finger.rad * 1.05,
-        finger.rad * 1.05,
+        finger.rad * 1.04,
+        finger.rad * 1.04,
+        finger.rad * 1.04,
         12,
         10,
         bodyBuf,
@@ -1371,7 +1299,7 @@ export function generateRealisticHumanScene(
         finger.p1End,
         finger.p2End,
         finger.rad * 0.92,
-        finger.rad * 0.82,
+        finger.rad * 0.84,
         12,
         bodyBuf,
         true,
@@ -1382,9 +1310,9 @@ export function generateRealisticHumanScene(
       // Distal interphalangeal (DIP) joint
       addEllipsoid(
         finger.p2End,
-        finger.rad * 0.95,
-        finger.rad * 0.95,
-        finger.rad * 0.95,
+        finger.rad * 0.94,
+        finger.rad * 0.94,
+        finger.rad * 0.94,
         12,
         10,
         bodyBuf,
@@ -1395,8 +1323,8 @@ export function generateRealisticHumanScene(
       addCylinder(
         finger.p2End,
         finger.p3End,
-        finger.rad * 0.82,
-        finger.rad * 0.70,
+        finger.rad * 0.84,
+        finger.rad * 0.74,
         12,
         bodyBuf,
         true,
@@ -1405,9 +1333,9 @@ export function generateRealisticHumanScene(
       );
       addEllipsoid(
         finger.p3End,
-        finger.rad * 0.80,
-        finger.rad * 0.80,
-        finger.rad * 0.80,
+        finger.rad * 0.82,
+        finger.rad * 0.82,
+        finger.rad * 0.82,
         12,
         10,
         bodyBuf,
@@ -1515,28 +1443,24 @@ export function generateRealisticHumanScene(
     // Continuous loft from integrated stand-up collar (y=1.520) down through shoulder yoke,
     // thoracic chest, waist, and hip hem (y=0.940) overlapping trousers waistband cleanly.
     const jacketTorsoKeyRings: LoftRing[] = [
-      // Integrated Stand-Up Collar Rim
-      { center: new THREE.Vector3(0, 1.520, -0.004), rx: 0.068, rz: 0.070 },
-      // Folded collar bend (sits flush against neck cylinder)
-      { center: new THREE.Vector3(0, 1.505, -0.005), rx: 0.074, rz: 0.076 },
+      // Integrated Collar Rim hugging neck base snugly
+      { center: new THREE.Vector3(0, 1.505, -0.005), rx: 0.076, rz: 0.078 },
       // Collar Base / Neckline junction
-      { center: new THREE.Vector3(0, 1.485, -0.006), rx: 0.110, rz: 0.092 },
-      // Clavicular slope bridging into neck base
-      { center: new THREE.Vector3(0, 1.465, -0.007), rx: 0.195, rz: 0.118 },
+      { center: new THREE.Vector3(0, 1.480, -0.006), rx: 0.120, rz: 0.098 },
+      // Clavicular slope bridging smoothly over clavicles
+      { center: new THREE.Vector3(0, 1.458, -0.007), rx: 0.205, rz: 0.124 },
       // Shoulder Yoke: Spans continuously across shoulders and deltoids
-      { center: new THREE.Vector3(0, 1.435, -0.008), rx: 0.245, rz: 0.134 },
+      { center: new THREE.Vector3(0, 1.430, -0.008), rx: 0.252, rz: 0.138 },
       // Thoracic chest & underarm junction
-      { center: new THREE.Vector3(0, 1.360, -0.008), rx: 0.205, rz: 0.142, frontOffset: 0.022 },
+      { center: new THREE.Vector3(0, 1.350, -0.008), rx: 0.218, rz: 0.144, frontOffset: 0.020 },
       // Mid-chest / ribcage
-      { center: new THREE.Vector3(0, 1.240, -0.004), rx: 0.180, rz: 0.130 },
-      // Waist
-      { center: new THREE.Vector3(0, 1.100, -0.002), rx: 0.165, rz: 0.122, frontOffset: 0.008 },
-      // Lower waist & hips
-      { center: new THREE.Vector3(0, 0.990, -0.005), rx: 0.174, rz: 0.134, backOffset: 0.024 },
-      // Hip hem (overlaps trousers waistband cleanly)
-      { center: new THREE.Vector3(0, 0.940, -0.006), rx: 0.180, rz: 0.138, backOffset: 0.026 },
+      { center: new THREE.Vector3(0, 1.230, -0.004), rx: 0.190, rz: 0.132 },
+      // Mid-waist
+      { center: new THREE.Vector3(0, 1.110, -0.003), rx: 0.174, rz: 0.124, frontOffset: 0.006 },
+      // Lower waist / jacket hem meeting trousers waistband cleanly without belt collision
+      { center: new THREE.Vector3(0, 1.010, -0.004), rx: 0.180, rz: 0.138, backOffset: 0.020 },
     ];
-    const jacketTorsoRings = interpolateLoftRings(jacketTorsoKeyRings, 3);
+    const jacketTorsoRings = interpolateLoftRings(jacketTorsoKeyRings, 4);
     addLoftRings(jacketTorsoRings, 48, upperBuf, false, false, shirtColorObj);
 
     // Integrated Deltoid Shoulder Cap Cloth Shells:
@@ -1544,10 +1468,10 @@ export function generateRealisticHumanScene(
     // ZERO exposed shoulder spheres!
     for (const side of armSides) {
       addEllipsoid(
-        new THREE.Vector3(side * 0.205, 1.425, -0.008),
-        0.068,
-        0.068,
-        0.068,
+        new THREE.Vector3(side * 0.208, 1.425, -0.008),
+        0.065,
+        0.052,
+        0.065,
         28,
         20,
         upperBuf,
@@ -1556,18 +1480,18 @@ export function generateRealisticHumanScene(
     }
 
     // Front placket seam, zipper teeth strip, and metallic slider
-    // Starts at neckline (y=1.470) and STOPS cleanly at jacket hem (y=0.950)
+    // Starts at neckline (y=1.470) and STOPS cleanly right above waistband and belt (y=1.015)
     addBox(
-      new THREE.Vector3(0, 1.210, 0.142),
-      new THREE.Vector3(0.024, 0.520, 0.008),
+      new THREE.Vector3(0, 1.2425, 0.142),
+      new THREE.Vector3(0.022, 0.455, 0.008),
       new THREE.Euler(0, 0, 0),
       upperBuf,
       shirtColorObj.clone().multiplyScalar(0.85)
     );
     // Metallic zipper teeth
     addBox(
-      new THREE.Vector3(0, 1.210, 0.147),
-      new THREE.Vector3(0.006, 0.510, 0.004),
+      new THREE.Vector3(0, 1.2425, 0.147),
+      new THREE.Vector3(0.006, 0.445, 0.004),
       new THREE.Euler(0, 0, 0),
       upperBuf,
       new THREE.Color('#cbd5e1')
@@ -1613,9 +1537,9 @@ export function generateRealisticHumanScene(
     // Connects directly into the shoulder yoke perimeter; ZERO open armpit voids or gaps!
     for (const side of armSides) {
       const sleeveKeyRings: LoftRing[] = [
-        { center: new THREE.Vector3(side * 0.205, 1.430, -0.008), rx: 0.068, rz: 0.068 }, // Directly inside shoulder yoke
-        { center: new THREE.Vector3(side * 0.218, 1.360, -0.008), rx: 0.064, rz: 0.064 },
-        { center: new THREE.Vector3(side * 0.235, 1.280, -0.008), rx: 0.060, rz: 0.060 },
+        { center: new THREE.Vector3(side * 0.205, 1.430, -0.008), rx: 0.070, rz: 0.070 }, // Directly inside shoulder yoke / deltoid cap
+        { center: new THREE.Vector3(side * 0.218, 1.360, -0.008), rx: 0.066, rz: 0.066 },
+        { center: new THREE.Vector3(side * 0.235, 1.275, -0.008), rx: 0.060, rz: 0.060 },
         { center: new THREE.Vector3(side * 0.252, 1.155, -0.012), rx: 0.054, rz: 0.054 }, // Elbow
         { center: new THREE.Vector3(side * 0.272, 1.020, -0.010), rx: 0.046, rz: 0.046 },
         { center: new THREE.Vector3(side * 0.290, 0.900, -0.008), rx: 0.038, rz: 0.038 }, // Wrist cuff
@@ -1625,10 +1549,10 @@ export function generateRealisticHumanScene(
 
       // Continuous axillary armpit gusset sealing armpit void cleanly
       addEllipsoid(
-        new THREE.Vector3(side * 0.170, 1.370, -0.008),
-        0.045,
-        0.038,
-        0.050,
+        new THREE.Vector3(side * 0.168, 1.365, -0.008),
+        0.052,
+        0.044,
+        0.056,
         18,
         14,
         upperBuf,
@@ -1724,15 +1648,19 @@ export function generateRealisticHumanScene(
     );
     addEllipsoid(new THREE.Vector3(0, 1.000, 0.136), 0.008, 0.008, 0.005, 12, 10, lowerBuf, new THREE.Color('#d97706'));
 
-    // 5 Belt loops evenly spaced circumferentially around waistband
-    const beltLoopAngles = [0.45, -0.45, 1.45, -1.45, Math.PI];
-    for (const ang of beltLoopAngles) {
-      const lx = 0.170 * Math.cos(ang);
-      const lz = 0.130 * Math.sin(ang);
+    // 5 Flush rectangular belt loops sitting snugly on waistband perimeter
+    const beltLoops = [
+      { pos: new THREE.Vector3(-0.068, 0.985, 0.140), rot: new THREE.Euler(0, 0.18, 0) },
+      { pos: new THREE.Vector3(0.068, 0.985, 0.140), rot: new THREE.Euler(0, -0.18, 0) },
+      { pos: new THREE.Vector3(-0.176, 0.985, -0.005), rot: new THREE.Euler(0, Math.PI / 2, 0) },
+      { pos: new THREE.Vector3(0.176, 0.985, -0.005), rot: new THREE.Euler(0, -Math.PI / 2, 0) },
+      { pos: new THREE.Vector3(0, 0.985, -0.140), rot: new THREE.Euler(0, 0, 0) },
+    ];
+    for (const loop of beltLoops) {
       addBox(
-        new THREE.Vector3(lx, 0.985, lz),
-        new THREE.Vector3(0.012, 0.045, 0.006),
-        new THREE.Euler(0, -ang, 0),
+        loop.pos,
+        new THREE.Vector3(0.012, 0.042, 0.006),
+        loop.rot,
         lowerBuf,
         pantsColorObj.clone().multiplyScalar(0.88)
       );
@@ -1741,10 +1669,10 @@ export function generateRealisticHumanScene(
     // Front curved scoop pockets, copper rivets, and rear patch pockets
     for (const side of legSides) {
       addCylinder(
-        new THREE.Vector3(side * 0.065, 0.970, 0.136),
-        new THREE.Vector3(side * 0.150, 0.940, 0.080),
-        0.003,
-        0.003,
+        new THREE.Vector3(side * 0.070, 0.965, 0.132),
+        new THREE.Vector3(side * 0.148, 0.930, 0.074),
+        0.0018,
+        0.0018,
         10,
         lowerBuf,
         true,
@@ -1752,7 +1680,7 @@ export function generateRealisticHumanScene(
         pantsColorObj.clone().multiplyScalar(0.82)
       );
       addEllipsoid(
-        new THREE.Vector3(side * 0.150, 0.940, 0.082),
+        new THREE.Vector3(side * 0.148, 0.930, 0.076),
         0.0035,
         0.0035,
         0.0025,
@@ -2034,62 +1962,76 @@ export function generateRealisticHumanScene(
     const watchColorObj = new THREE.Color(watchColor);
 
     // --- Sleek Modern Eyewear ---
-    // Refined wayfarer/rectangular frames with sleek temple arms extending back over ears
+    // Refined wayfarer frames framing the eyes with clear optical visibility of sclera & iris
+    // Temple arms extending back over ears without intersecting cheek flesh
     for (const side of [1, -1]) {
       const xEye = side * 0.035;
-      const eyeZ = 0.081;
+      const eyeZ = 0.076;
 
-      // Top frame bar
+      // Top wayfarer brow bar
       addBox(
-        new THREE.Vector3(xEye, 1.659, eyeZ),
+        new THREE.Vector3(xEye, 1.662, eyeZ),
+        new THREE.Vector3(0.032, 0.0028, 0.0035),
+        new THREE.Euler(0, 0, 0),
+        accBuf,
+        glassesColorObj
+      );
+      // Bottom rim bar
+      addBox(
+        new THREE.Vector3(xEye, 1.638, eyeZ),
         new THREE.Vector3(0.030, 0.0024, 0.003),
         new THREE.Euler(0, 0, 0),
         accBuf,
         glassesColorObj
       );
-      // Bottom frame bar
+      // Lateral outer hinge rim
       addBox(
-        new THREE.Vector3(xEye, 1.641, eyeZ),
-        new THREE.Vector3(0.030, 0.0024, 0.003),
-        new THREE.Euler(0, 0, 0),
-        accBuf,
-        glassesColorObj
-      );
-      // Lateral outer hinge bar
-      addBox(
-        new THREE.Vector3(xEye + side * 0.014, 1.650, eyeZ),
-        new THREE.Vector3(0.0024, 0.018, 0.003),
+        new THREE.Vector3(side * 0.052, 1.650, eyeZ),
+        new THREE.Vector3(0.0028, 0.024, 0.003),
         new THREE.Euler(0, 0, 0),
         accBuf,
         glassesColorObj
       );
       // Medial inner bridge rim
       addBox(
-        new THREE.Vector3(xEye - side * 0.014, 1.650, eyeZ),
-        new THREE.Vector3(0.0024, 0.018, 0.003),
+        new THREE.Vector3(side * 0.018, 1.650, eyeZ),
+        new THREE.Vector3(0.0024, 0.022, 0.003),
         new THREE.Euler(0, 0, 0),
         accBuf,
         glassesColorObj
       );
 
-      // Sleek Tinted Glass Lens
-      addEllipsoid(
-        new THREE.Vector3(xEye, 1.650, eyeZ - 0.0005),
-        0.0135,
-        0.0080,
-        0.0014,
-        16,
-        12,
+      // Outer wayfarer brow extension (hinge lug meeting cranium width rx=0.076)
+      addCylinder(
+        new THREE.Vector3(side * 0.052, 1.662, eyeZ),
+        new THREE.Vector3(side * 0.068, 1.658, eyeZ - 0.004),
+        0.0018,
+        0.0018,
+        10,
         accBuf,
-        new THREE.Color('#334155')
+        true,
+        true,
+        glassesColorObj
       );
 
-      // Sleek temple arms extending back naturally over the ears
+      // Sleek temple arms extending back naturally along skull over the ears
       addCylinder(
-        new THREE.Vector3(xEye + side * 0.014, 1.656, eyeZ - 0.002),
-        new THREE.Vector3(side * 0.076, 1.636, -0.010),
+        new THREE.Vector3(side * 0.068, 1.658, eyeZ - 0.004),
+        new THREE.Vector3(side * 0.075, 1.636, -0.010),
         0.0016,
         0.0016,
+        10,
+        accBuf,
+        true,
+        true,
+        glassesColorObj
+      );
+      // Temple earpiece resting gently over the ear helix
+      addCylinder(
+        new THREE.Vector3(side * 0.075, 1.636, -0.010),
+        new THREE.Vector3(side * 0.073, 1.618, -0.022),
+        0.0016,
+        0.0014,
         10,
         accBuf,
         true,
@@ -2100,8 +2042,8 @@ export function generateRealisticHumanScene(
 
     // Nasal bridge connector bridging across nasal bone
     addBox(
-      new THREE.Vector3(0, 1.654, 0.081),
-      new THREE.Vector3(0.016, 0.0022, 0.0025),
+      new THREE.Vector3(0, 1.656, 0.080),
+      new THREE.Vector3(0.038, 0.0028, 0.0035),
       new THREE.Euler(0, 0, 0),
       accBuf,
       glassesColorObj
@@ -2109,54 +2051,47 @@ export function generateRealisticHumanScene(
 
     // --- Smart Watch / Wristwatch (on Left Wrist in Relaxed A-Pose) ---
     // Sits snugly on left wrist right below jacket sleeve cuff
-    const watchCenter = new THREE.Vector3(-0.290, 0.888, -0.008);
-    // Metallic bezel casing
-    addCylinder(
-      new THREE.Vector3(-0.290, 0.888, -0.014),
-      new THREE.Vector3(-0.290, 0.888, -0.002),
-      0.018,
-      0.018,
-      24,
+    const watchCenter = new THREE.Vector3(-0.290, 0.880, -0.007);
+    // Metallic bezel casing on dorsal wrist
+    addBox(
+      new THREE.Vector3(-0.290, 0.880, 0.016),
+      new THREE.Vector3(0.024, 0.026, 0.006),
+      new THREE.Euler(0, 0, 0),
       accBuf,
-      true,
-      true,
       watchColorObj
     );
 
     // Sapphire display glass screen
-    addEllipsoid(
-      new THREE.Vector3(-0.290, 0.888, -0.001),
-      0.015,
-      0.015,
-      0.002,
-      18,
-      14,
+    addBox(
+      new THREE.Vector3(-0.290, 0.880, 0.0195),
+      new THREE.Vector3(0.020, 0.022, 0.002),
+      new THREE.Euler(0, 0, 0),
       accBuf,
       new THREE.Color('#0f172a')
     );
 
     // Crown dial button on side
     addCylinder(
-      new THREE.Vector3(-0.290, 0.904, -0.008),
-      new THREE.Vector3(-0.290, 0.910, -0.008),
-      0.0035,
-      0.0035,
-      12,
+      new THREE.Vector3(-0.278, 0.880, 0.016),
+      new THREE.Vector3(-0.275, 0.880, 0.016),
+      0.0025,
+      0.0025,
+      10,
       accBuf,
       true,
       true,
-      watchColorObj.clone().multiplyScalar(1.1)
+      watchColorObj.clone().multiplyScalar(1.2)
     );
 
-    // Fitted wrist strap wrapping around wrist circumference, perpendicular to left arm trajectory
+    // Fitted wrist strap wrapping snugly around wrist circumference
     const leftArmDir = new THREE.Vector3(-0.088, -0.520, 0).normalize();
     const leftArmRot = new THREE.Euler().setFromQuaternion(
       new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), leftArmDir)
     );
     addTorus(
       watchCenter,
-      0.035,
-      0.006,
+      0.027,
+      0.004,
       12,
       24,
       leftArmRot,

@@ -139,8 +139,10 @@ if (typeof globalThis !== 'undefined' && typeof (globalThis as any).ImageData ==
  */
 function encodeRGBAToPNG(width: number, height: number, rgba: Uint8Array | Uint8ClampedArray): Uint8Array {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const zlib = typeof window === 'undefined' ? require('zlib') : null;
+    let zlib: any = null;
+    if (typeof window === 'undefined' && typeof process !== 'undefined' && typeof (process as any).getBuiltinModule === 'function') {
+      zlib = (process as any).getBuiltinModule('zlib');
+    }
     if (!zlib) return new Uint8Array(0);
 
     const stride = width * 4;
@@ -180,7 +182,8 @@ function encodeRGBAToPNG(width: number, height: number, rgba: Uint8Array | Uint8
       chunk('IDAT', deflated),
       chunk('IEND', Buffer.alloc(0)),
     ]);
-  } catch {
+  } catch (err) {
+    console.error('[IO] encodeRGBAToPNG error:', err);
     return new Uint8Array(0);
   }
 }
