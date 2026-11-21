@@ -1,6 +1,7 @@
 import bpy
 import sys
 import math
+import os
 
 # Clear existing objects
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -69,9 +70,12 @@ track.up_axis = 'UP_Y'
 bpy.context.scene.render.resolution_x = 800
 bpy.context.scene.render.resolution_y = 1000
 
+artifact_dir = "/home/sudpy/.gemini/antigravity-cli/brain/8bd8d386-8923-4fdf-beaa-399fc867af7a"
+
 views = [
-    ("render_full.png", (0, -3.2, 0.95), (0, 0, 0.95)),
-    ("render_head.png", (0, -0.65, 1.63), (0, 0, 1.63)),
+    ("render_full.png", (0, -3.0, 0.95), (0, 0, 0.95)),
+    ("render_back.png", (0, 3.0, 0.95), (0, 0, 0.95)),
+    ("render_head.png", (0, -0.62, 1.63), (0, 0, 1.63)),
     ("render_upper.png", (0, -1.45, 1.25), (0, 0, 1.25)),
     ("render_legs.png", (0, -1.6, 0.55), (0, 0, 0.55)),
     ("render_hand.png", (-0.45, -0.5, 0.82), (-0.30, 0, 0.82)),
@@ -82,7 +86,7 @@ for out_name, cam_pos, target_pos in views:
     target.location = target_pos
     bpy.context.view_layer.update()
     
-    bpy.context.scene.render.filepath = f"/home/sudpy/Projects/polyforge/{out_name}"
+    out_path = os.path.join(artifact_dir, out_name)
+    bpy.context.scene.render.filepath = out_path
     bpy.ops.render.render(write_still=True)
-    print(f"Rendered {out_name}")
-
+    print(f"Rendered {out_path}")
