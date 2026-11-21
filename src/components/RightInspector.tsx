@@ -10,6 +10,8 @@ import {
   Lock,
   Unlock,
   Wand2,
+  Search,
+  X,
 } from 'lucide-react';
 import {
   EnvironmentSettings,
@@ -125,6 +127,15 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
   const [activeTab, setActiveTab] = useState<'transform' | 'material' | 'modifiers' | 'scene' | 'environment'>('transform');
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [tempName, setTempName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredItems = searchQuery.trim()
+    ? sceneItems.filter(
+        (it) =>
+          it.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          it.id.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : sceneItems;
 
   // Transform input handlers
   const handlePositionChange = (axis: 0 | 1 | 2, val: number) => {
@@ -219,10 +230,41 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
           <div className="space-y-2">
             <div className="flex justify-between items-center text-slate-400 font-semibold mb-2">
               <span className="text-[11px] uppercase tracking-wider">Scene Hierarchy ({sceneItems.length})</span>
+              {searchQuery && (
+                <span className="text-[10px] text-studio-accent font-mono">
+                  {filteredItems.length} match{filteredItems.length === 1 ? '' : 'es'}
+                </span>
+              )}
+            </div>
+
+            {/* Outliner Search Input */}
+            <div className="relative mb-2">
+              <Search size={13} className="absolute left-2.5 top-2.5 text-slate-500 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter objects (e.g. saddle, jeans)..."
+                className="w-full bg-studio-950 border border-studio-800 focus:border-studio-accent rounded pl-8 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-white"
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             <div className="space-y-1">
-              {sceneItems.map((item) => {
+              {filteredItems.length === 0 ? (
+                <div className="text-center py-6 text-slate-500 text-xs">
+                  No objects matching "{searchQuery}"
+                </div>
+              ) : (
+                filteredItems.map((item) => {
                 const isSelected = selectedItem?.id === item.id;
                 const isEditing = editingNameId === item.id;
 
@@ -299,7 +341,7 @@ export const RightInspector: React.FC<RightInspectorProps> = ({
                     </div>
                   </div>
                 );
-              })}
+              }))}
             </div>
           </div>
         )}

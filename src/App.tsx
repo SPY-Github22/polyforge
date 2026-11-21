@@ -835,10 +835,32 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Delete
-      if (e.key === 'Delete' || key === 'x') {
+      // Delete (Del / Backspace / X)
+      if (e.key === 'Delete' || e.key === 'Backspace' || key === 'x') {
         e.preventDefault();
         handleDeleteSelected();
+        return;
+      }
+
+      // Hide Selected (H) / Unhide All (Alt+H)
+      if (key === 'h') {
+        e.preventDefault();
+        if (e.altKey) {
+          setSceneItems((prev) => prev.map((it) => ({ ...it, visible: true })));
+        } else if (selectedId) {
+          setSceneItems((prev) =>
+            prev.map((it) => (it.id === selectedId ? { ...it, visible: !it.visible } : it))
+          );
+        }
+        return;
+      }
+
+      // Lock / Unlock (L)
+      if (key === 'l' && selectedId) {
+        e.preventDefault();
+        setSceneItems((prev) =>
+          prev.map((it) => (it.id === selectedId ? { ...it, locked: !it.locked } : it))
+        );
         return;
       }
 
@@ -900,7 +922,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleDuplicateSelected, handleDeleteSelected]);
+  }, [handleDuplicateSelected, handleDeleteSelected, selectedId]);
 
   const selectedItem = sceneItems.find((it) => it.id === selectedId) || null;
   const activeTrack = tracks.find((t) => t.objectId === selectedId);
@@ -971,6 +993,7 @@ export const App: React.FC = () => {
           cameraView={cameraView}
           transformMode={transformMode}
           selectedObjectName={selectedItem ? selectedItem.name : null}
+          selectedItem={selectedItem}
           onResetCamera={() => setCameraView('perspective')}
           onFocusSelected={() => {
             if (engineRef.current) {
@@ -978,6 +1001,21 @@ export const App: React.FC = () => {
             }
           }}
           onChangeCameraView={setCameraView}
+          onToggleVisibility={(id) =>
+            setSceneItems((prev) =>
+              prev.map((it) => (it.id === id ? { ...it, visible: !it.visible } : it))
+            )
+          }
+          onToggleLock={(id) =>
+            setSceneItems((prev) =>
+              prev.map((it) => (it.id === id ? { ...it, locked: !it.locked } : it))
+            )
+          }
+          onDuplicateSelected={handleDuplicateSelected}
+          onDeleteSelected={handleDeleteSelected}
+          onUnhideAll={() =>
+            setSceneItems((prev) => prev.map((it) => ({ ...it, visible: true })))
+          }
         />
 
         {/* Right Inspector */}

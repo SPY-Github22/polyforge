@@ -33,7 +33,7 @@ describe('Kinematic Cyclist & Animation Circuit Engine', () => {
     }
   });
 
-  it('generates a complete articulated animated cyclist circuit with 17 sub-assemblies and 17 animation tracks', () => {
+  it('generates a complete articulated animated cyclist circuit with 18 sub-assemblies and 18 animation tracks', () => {
     const circuit = generateAnimatedCyclistCircuit({
       totalFrames: 360,
       fps: 30,
@@ -43,13 +43,14 @@ describe('Kinematic Cyclist & Animation Circuit Engine', () => {
       articulated: true,
     });
 
-    // 7 bicycle + 10 cyclist (body, hair/top, jeans/saddle, accessories, right thigh/shin/shoe, left thigh/shin/shoe) = 17 sub-assemblies
-    expect(circuit.allItems.length).toBe(17);
-    expect(circuit.bicycleItems.length).toBe(7);
+    // 8 bicycle (frame, saddle, cockpit, front wheel, rear wheel, crankset, left pedal, right pedal)
+    // + 10 cyclist (body, hair/top, jeans/saddle, accessories, right thigh/shin/shoe, left thigh/shin/shoe) = 18 sub-assemblies
+    expect(circuit.allItems.length).toBe(18);
+    expect(circuit.bicycleItems.length).toBe(8);
     expect(circuit.cyclistItems.length).toBe(10);
 
-    // 17 synchronized animation tracks
-    expect(circuit.tracks.length).toBe(17);
+    // 18 synchronized animation tracks
+    expect(circuit.tracks.length).toBe(18);
 
     // 361 keyframes per track (0 through 360)
     for (const track of circuit.tracks) {
@@ -65,20 +66,20 @@ describe('Kinematic Cyclist & Animation Circuit Engine', () => {
     // Stat densities
     expect(circuit.stats.totalVertices).toBeGreaterThan(40000);
     expect(circuit.stats.totalTriangles).toBeGreaterThan(70000);
-    expect(circuit.stats.totalItems).toBe(17);
+    expect(circuit.stats.totalItems).toBe(18);
   });
 
-  it('supports monolithic non-articulated fallback with 12 sub-assemblies and 12 animation tracks', () => {
+  it('supports monolithic non-articulated fallback with 13 sub-assemblies and 13 animation tracks', () => {
     const circuit = generateAnimatedCyclistCircuit({
       totalFrames: 120,
       articulated: false,
     });
 
-    // 7 bicycle + 5 cyclist = 12 sub-assemblies
-    expect(circuit.allItems.length).toBe(12);
-    expect(circuit.bicycleItems.length).toBe(7);
+    // 8 bicycle + 5 cyclist = 13 sub-assemblies
+    expect(circuit.allItems.length).toBe(13);
+    expect(circuit.bicycleItems.length).toBe(8);
     expect(circuit.cyclistItems.length).toBe(5);
-    expect(circuit.tracks.length).toBe(12);
+    expect(circuit.tracks.length).toBe(13);
   });
 
   it('correctly aligns the cyclist pelvis with the bicycle saddle and feet with pedals', () => {
@@ -152,12 +153,12 @@ describe('Kinematic Cyclist & Animation Circuit Engine', () => {
 
   it('supports male cyclist configuration', () => {
     const articulatedCircuit = generateAnimatedCyclistCircuit({ gender: 'male', articulated: true });
-    expect(articulatedCircuit.allItems.length).toBe(17);
-    expect(articulatedCircuit.tracks.length).toBe(17);
+    expect(articulatedCircuit.allItems.length).toBe(18);
+    expect(articulatedCircuit.tracks.length).toBe(18);
 
     const monoCircuit = generateAnimatedCyclistCircuit({ gender: 'male', articulated: false });
-    expect(monoCircuit.allItems.length).toBe(12);
-    expect(monoCircuit.tracks.length).toBe(12);
+    expect(monoCircuit.allItems.length).toBe(13);
+    expect(monoCircuit.tracks.length).toBe(13);
   });
 
   it('exports animated cyclist GLB buffer with embedded animation tracks', async () => {

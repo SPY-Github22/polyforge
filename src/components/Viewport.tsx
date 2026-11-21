@@ -1,7 +1,18 @@
-import React, { useRef, useEffect } from 'react';
-import { CameraView, TransformMode, ViewportStats } from '../types';
+import React, { useRef, useEffect, useState } from 'react';
+import { CameraView, SceneItem, TransformMode, ViewportStats } from '../types';
 import { Engine } from '../core/engine';
-import { Activity, Compass, Focus } from 'lucide-react';
+import {
+  Activity,
+  Compass,
+  Focus,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  Copy,
+  Trash2,
+  Palette,
+} from 'lucide-react';
 
 interface ViewportProps {
   engineRef: React.MutableRefObject<Engine | null>;
@@ -10,9 +21,16 @@ interface ViewportProps {
   cameraView: CameraView;
   transformMode: TransformMode;
   selectedObjectName: string | null;
+  selectedItem?: SceneItem | null;
   onResetCamera: () => void;
   onFocusSelected: () => void;
   onChangeCameraView: (view: CameraView) => void;
+  onToggleVisibility?: (id: string) => void;
+  onToggleLock?: (id: string) => void;
+  onDuplicateSelected?: () => void;
+  onDeleteSelected?: () => void;
+  onUnhideAll?: () => void;
+  onOpenMaterialTab?: () => void;
 }
 
 export const Viewport: React.FC<ViewportProps> = ({
@@ -21,11 +39,19 @@ export const Viewport: React.FC<ViewportProps> = ({
   cameraView,
   transformMode,
   selectedObjectName,
+  selectedItem,
   onResetCamera,
   onFocusSelected,
   onChangeCameraView,
+  onToggleVisibility,
+  onToggleLock,
+  onDuplicateSelected,
+  onDeleteSelected,
+  onUnhideAll,
+  onOpenMaterialTab,
 }) => {
   const canvasHolderRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
   // Transfer container ref
   useEffect(() => {
@@ -35,8 +61,33 @@ export const Viewport: React.FC<ViewportProps> = ({
     }
   }, [containerRef]);
 
+  // Close context menu on outside click or escape
+  useEffect(() => {
+    const handleCloseMenu = () => setContextMenu(null);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+
+    if (contextMenu) {
+      window.addEventListener('click', handleCloseMenu);
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('click', handleCloseMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY });
+  };
+
   return (
-    <div className="flex-1 relative bg-white overflow-hidden select-none">
+    <div
+      className="flex-1 relative bg-white overflow-hidden select-none"
+      onContextMenu={handleContextMenu}
+    >
       {/* 3D WebGL Canvas Holder */}
       <div ref={canvasHolderRef} className="w-full h-full" />
 
@@ -55,6 +106,95 @@ export const Viewport: React.FC<ViewportProps> = ({
           </div>
         )}
       </div>
+
+      {/* Top Center: Floating HUD Action Toolbar for Selected Object */}
+      {selectedItem && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center space-x-1 bg-studio-900/90 backdrop-blur-md border border-studio-750/80 px-2.5 py-1.5 rounded-xl shadow-2xl z-20 transition-all">
+          <div className="flex items-center space-x-1.5 pr-2 mr-1 border-r border-studio-750">
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
+              style={{ backgroundColor: selectedItem.material?.color || '#3b82f6' }}
+            />
+            <span className="font-semibold text-xs text-white max-w-[130px] truncate" title={selectedItem.name}>
+              {selectedItem.name}
+            </span>
+          </div>
+
+          {/* Visibility Toggle Button */}
+          {onToggleVisibility && (
+            <button
+              onClick={() => onToggleVisibility(selectedItem.id)}
+              title={selectedItem.visible ? 'Hide Object (H)' : 'Show Object (H)'}
+              className={`p-1.5 rounded-lg text-xs flex items-center space-x-1 transition ${
+                selectedItem.visible
+                  ? 'text-slate-300 hover:text-white hover:bg-studio-800'
+                  : 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+              }`}
+            >
+              {selectedItem.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+          )}
+
+          {/* Frame/Focus Button */}
+          <button
+            onClick={onFocusSelected}
+            title="Focus Camera (F)"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-studio-800 transition"
+          >
+            <Focus size={14} />
+          </button>
+
+          {/* Lock Transform Button */}
+          {onToggleLock && (
+            <button
+              onClick={() => onToggleLock(selectedItem.id)}
+              title={selectedItem.locked ? 'Unlock Object (L)' : 'Lock Transform (L)'}
+              className={`p-1.5 rounded-lg text-xs transition ${
+                selectedItem.locked
+                  ? 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'
+                  : 'text-slate-300 hover:text-white hover:bg-studio-800'
+              }`}
+            >
+              {selectedItem.locked ? <Lock size={14} /> : <Unlock size={14} />}
+            </button>
+          )}
+
+          {/* Duplicate Button */}
+          {onDuplicateSelected && (
+            <button
+              onClick={onDuplicateSelected}
+              title="Duplicate Object (Shift+D)"
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-studio-800 transition"
+            >
+              <Copy size={14} />
+            </button>
+          )}
+
+          {/* Material Button */}
+          {onOpenMaterialTab && (
+            <button
+              onClick={onOpenMaterialTab}
+              title="Inspect Material"
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-studio-800 transition"
+            >
+              <Palette size={14} />
+            </button>
+          )}
+
+          <div className="w-[1px] h-4 bg-studio-750 mx-0.5" />
+
+          {/* Delete Button */}
+          {onDeleteSelected && (
+            <button
+              onClick={onDeleteSelected}
+              title="Delete Object (Del / Backspace)"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Top Right: View Cube / Orientation Widget */}
       <div className="absolute top-3 right-3 flex flex-col space-y-1.5 z-10">
@@ -139,6 +279,156 @@ export const Viewport: React.FC<ViewportProps> = ({
           Objects: <span className="text-slate-200 font-semibold">{stats.objectsCount}</span>
         </div>
       </div>
+
+      {/* Right-Click 3D Context Menu */}
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed bg-studio-900/95 backdrop-blur-xl border border-studio-750/90 rounded-xl shadow-2xl py-1.5 min-w-[210px] z-50 text-xs text-slate-200 divide-y divide-studio-800 select-none animate-in fade-in zoom-in-95 duration-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {selectedItem && (
+            <div className="px-3 py-1.5 font-semibold text-slate-400 text-[11px] uppercase tracking-wider flex items-center space-x-1.5">
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: selectedItem.material?.color || '#3b82f6' }}
+              />
+              <span className="truncate">{selectedItem.name}</span>
+            </div>
+          )}
+
+          <div className="py-1">
+            {selectedItem && (
+              <>
+                <button
+                  onClick={() => {
+                    onFocusSelected();
+                    setContextMenu(null);
+                  }}
+                  className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+                >
+                  <span className="flex items-center space-x-2">
+                    <Focus size={13} />
+                    <span>Focus Selected</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">F</span>
+                </button>
+
+                {onToggleVisibility && (
+                  <button
+                    onClick={() => {
+                      onToggleVisibility(selectedItem.id);
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+                  >
+                    <span className="flex items-center space-x-2">
+                      {selectedItem.visible ? <EyeOff size={13} /> : <Eye size={13} />}
+                      <span>{selectedItem.visible ? 'Hide Object' : 'Show Object'}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">H</span>
+                  </button>
+                )}
+
+                {onToggleLock && (
+                  <button
+                    onClick={() => {
+                      onToggleLock(selectedItem.id);
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+                  >
+                    <span className="flex items-center space-x-2">
+                      {selectedItem.locked ? <Unlock size={13} /> : <Lock size={13} />}
+                      <span>{selectedItem.locked ? 'Unlock Transform' : 'Lock Transform'}</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">L</span>
+                  </button>
+                )}
+
+                {onDuplicateSelected && (
+                  <button
+                    onClick={() => {
+                      onDuplicateSelected();
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <Copy size={13} />
+                      <span>Duplicate Object</span>
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">Shift+D</span>
+                  </button>
+                )}
+
+                {onOpenMaterialTab && (
+                  <button
+                    onClick={() => {
+                      onOpenMaterialTab();
+                      setContextMenu(null);
+                    }}
+                    className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <Palette size={13} />
+                      <span>Inspect Material</span>
+                    </span>
+                  </button>
+                )}
+              </>
+            )}
+
+            {onUnhideAll && (
+              <button
+                onClick={() => {
+                  onUnhideAll();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+              >
+                <span className="flex items-center space-x-2">
+                  <Eye size={13} />
+                  <span>Unhide All Objects</span>
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">Alt+H</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => {
+                onResetCamera();
+                setContextMenu(null);
+              }}
+              className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+            >
+              <span className="flex items-center space-x-2">
+                <Compass size={13} />
+                <span>Reset Camera View</span>
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono">Home</span>
+            </button>
+          </div>
+
+          {selectedItem && onDeleteSelected && (
+            <div className="py-1">
+              <button
+                onClick={() => {
+                  onDeleteSelected();
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 transition"
+              >
+                <span className="flex items-center space-x-2">
+                  <Trash2 size={13} />
+                  <span>Delete Object</span>
+                </span>
+                <span className="text-[10px] text-rose-500/80 font-mono">Del</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

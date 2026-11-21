@@ -49,6 +49,7 @@ export interface BicycleResult {
 
 export interface ModularBicycleResult {
   frameItem: SceneItem;
+  saddleItem: SceneItem;
   cockpitItem: SceneItem;
   frontWheelItem: SceneItem;
   rearWheelItem: SceneItem;
@@ -58,6 +59,7 @@ export interface ModularBicycleResult {
   allItems: SceneItem[];
   stats: {
     frameTriangles: number;
+    saddleTriangles: number;
     cockpitTriangles: number;
     frontWheelTriangles: number;
     rearWheelTriangles: number;
@@ -1903,6 +1905,7 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
 
   // Geometry buffers for modular components
   const frameBuf = createBuffer();
+  const saddleBuf = createBuffer();
   const cockpitBuf = createBuffer();
   const frontWheelBuf = createBuffer();
   const rearWheelBuf = createBuffer();
@@ -2003,7 +2006,7 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
   }
   // Saddle & Seatpost
   const saddleClampPos = new THREE.Vector3(seatCluster.x - 0.035, seatCluster.y + 0.125, 0.0);
-  addSaddle(seatCluster, saddleClampPos, frameBuf);
+  addSaddle(seatCluster, saddleClampPos, saddleBuf);
 
   // Rear Derailleur Assembly
   const derailleurHanger = new THREE.Vector3(rearAxle.x + 0.008, rearAxle.y - 0.038, 0.068);
@@ -2430,12 +2433,33 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
     texturePreset: includeReflectors ? 'reflector_amber' : 'brushed_metal',
   };
 
+  const saddleMat: MaterialProperties = {
+    color: '#1a1d20',
+    roughness: 0.72,
+    metalness: 0.15,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    transmission: 0,
+    opacity: 1,
+    transparent: false,
+    wireframe: false,
+    texturePreset: 'leather_perforated',
+  };
+
   // Construct Modular SceneItems with local pivots
   const frameItem = createSceneItemFromBuffer(
     'bicycle_frame',
-    'Bicycle - Diamond Road Frame, Seating & Fixed Drivetrain',
+    'Bicycle - Diamond Road Frame & Fixed Drivetrain',
     frameBuf,
     frameMat,
+    [0, 0, 0]
+  );
+
+  const saddleItem = createSceneItemFromBuffer(
+    'bicycle_saddle',
+    'Bicycle - Ergonomic Racing Saddle & Seatpost',
+    saddleBuf,
+    saddleMat,
     [0, 0, 0]
   );
 
@@ -2489,6 +2513,7 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
 
   const allItems = [
     frameItem,
+    saddleItem,
     cockpitItem,
     frontWheelItem,
     rearWheelItem,
@@ -2498,15 +2523,17 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
   ];
 
   const frameTris = frameBuf.indices.length / 3;
+  const saddleTris = saddleBuf.indices.length / 3;
   const cockpitTris = cockpitBuf.indices.length / 3;
   const frontWheelTris = frontWheelBuf.indices.length / 3;
   const rearWheelTris = rearWheelBuf.indices.length / 3;
   const cranksetTris = cranksetBuf.indices.length / 3;
   const pedalsTris = (leftPedalBuf.indices.length + rightPedalBuf.indices.length) / 3;
-  const totalTris = frameTris + cockpitTris + frontWheelTris + rearWheelTris + cranksetTris + pedalsTris;
+  const totalTris = frameTris + saddleTris + cockpitTris + frontWheelTris + rearWheelTris + cranksetTris + pedalsTris;
 
   const totalVerts =
     (frameBuf.positions.length +
+      saddleBuf.positions.length +
       cockpitBuf.positions.length +
       frontWheelBuf.positions.length +
       rearWheelBuf.positions.length +
@@ -2517,6 +2544,7 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
 
   return {
     frameItem,
+    saddleItem,
     cockpitItem,
     frontWheelItem,
     rearWheelItem,
@@ -2526,6 +2554,7 @@ export function generateModularBicycle(options: BicycleOptions = {}): ModularBic
     allItems,
     stats: {
       frameTriangles: frameTris,
+      saddleTriangles: saddleTris,
       cockpitTriangles: cockpitTris,
       frontWheelTriangles: frontWheelTris,
       rearWheelTriangles: rearWheelTris,
@@ -2564,8 +2593,9 @@ export function generateAnimatedBicycleCircuit(
   const steerAxis = new THREE.Vector3().subVectors(headTubeTop, headTubeBottom).normalize();
   const frontAxleRelSteer = new THREE.Vector3().subVectors(frontAxle, headTubeBottom);
 
-  // Animation Tracks for 7 modular components
+  // Animation Tracks for 8 modular components
   const frameKeyframes: Keyframe[] = [];
+  const saddleKeyframes: Keyframe[] = [];
   const cockpitKeyframes: Keyframe[] = [];
   const frontWheelKeyframes: Keyframe[] = [];
   const rearWheelKeyframes: Keyframe[] = [];
@@ -2588,6 +2618,16 @@ export function generateAnimatedBicycleCircuit(
     );
 
     frameKeyframes.push({
+      frame: f,
+      transform: {
+        position: [P_frame.x, P_frame.y, P_frame.z],
+        rotation: [rollAngle, yawAngle, pitchAngle],
+        scale: [1, 1, 1],
+      },
+      interpolation: 'linear',
+    });
+
+    saddleKeyframes.push({
       frame: f,
       transform: {
         position: [P_frame.x, P_frame.y, P_frame.z],
@@ -2701,6 +2741,7 @@ export function generateAnimatedBicycleCircuit(
 
   const tracks: AnimationTrack[] = [
     { objectId: modularBicycle.frameItem.id, keyframes: frameKeyframes },
+    { objectId: modularBicycle.saddleItem.id, keyframes: saddleKeyframes },
     { objectId: modularBicycle.cockpitItem.id, keyframes: cockpitKeyframes },
     { objectId: modularBicycle.frontWheelItem.id, keyframes: frontWheelKeyframes },
     { objectId: modularBicycle.rearWheelItem.id, keyframes: rearWheelKeyframes },

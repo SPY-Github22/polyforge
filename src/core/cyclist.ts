@@ -159,7 +159,47 @@ export function poseCharacterAsCyclist(
     }
   }
 
+  function getNeckHeadPos(x0: number, y0: number, z0: number): [number, number, number] {
+    const neckBaseX = saddlePos.x + torsoHeight * sinLean;
+    const neckBaseY = saddlePos.y + torsoHeight * cosLean;
+    const h = y0 - standingShoulderY;
+    const neckLen = 0.085;
+    const headPitch = 0.14; // Natural horizontal gaze
+
+    let spinePtX = neckBaseX;
+    let spinePtY = neckBaseY;
+    let localAngle = torsoLeanRad;
+
+    if (h <= neckLen) {
+      // Cervical neck: smooth Hermite blend from torso lean (~36°) to head gaze (~8°)
+      const v = Math.max(0, Math.min(1, h / neckLen));
+      const t = v * v * (3 - 2 * v);
+      localAngle = (1 - t) * torsoLeanRad + t * headPitch;
+      const avgAngle = (torsoLeanRad + localAngle) * 0.5;
+      spinePtX = neckBaseX + h * Math.sin(avgAngle);
+      spinePtY = neckBaseY + h * Math.cos(avgAngle);
+    } else {
+      // Head & Cranium: continuous extension along gaze line from skull base
+      const avgNeckAngle = (torsoLeanRad + headPitch) * 0.5;
+      const skullBaseX = neckBaseX + neckLen * Math.sin(avgNeckAngle);
+      const skullBaseY = neckBaseY + neckLen * Math.cos(avgNeckAngle);
+      const headDist = h - neckLen;
+      localAngle = headPitch;
+      spinePtX = skullBaseX + headDist * Math.sin(headPitch);
+      spinePtY = skullBaseY + headDist * Math.cos(headPitch);
+    }
+
+    const headX = spinePtX + z0 * Math.cos(localAngle);
+    const headY = spinePtY - z0 * Math.sin(localAngle);
+    const headZ = saddlePos.z + x0;
+
+    return [headX, headY, headZ];
+  }
+
   function getTorsoPos(x0: number, y0: number, z0: number): [number, number, number] {
+    if (y0 > standingShoulderY) {
+      return getNeckHeadPos(x0, y0, z0);
+    }
     const u = Math.max(0, Math.min(1, (y0 - standingPelvisY) / torsoHeight));
     const currentLean = 0.28 + u * (torsoLeanRad - 0.28);
     const spineDist = (y0 - standingPelvisY);
@@ -318,20 +358,8 @@ export function poseCharacterAsCyclist(
       return getTorsoPos(x0, y0, z0);
     }
 
-    // 6. Neck and Head: cervical spine extends so eyes and face point forward down the road
-    const neckBaseX = saddlePos.x + torsoHeight * sinLean;
-    const neckBaseY = saddlePos.y + torsoHeight * cosLean;
-    const headHeightAboveShoulder = y0 - standingShoulderY;
-
-    // Head extends upward and forward with horizontal eye level
-    const headPitch = 0.16; // Slight natural forward tilt (~9°)
-    const headDist = headHeightAboveShoulder;
-
-    const headX = neckBaseX + headDist * Math.sin(headPitch) + 0.02 + z0 * Math.cos(headPitch);
-    const headY = neckBaseY + headDist * Math.cos(headPitch) - z0 * Math.sin(headPitch);
-    const headZ = saddlePos.z + x0;
-
-    return [headX, headY, headZ];
+    // 6. Neck and Head: continuous cervical spine curvature extending smoothly from shoulders to cranium (zero tearing)
+    return getNeckHeadPos(x0, y0, z0);
   }
 
   // Deform all SceneItems in the character result
@@ -368,8 +396,9 @@ export function poseCharacterAsCyclist(
         const y0_1 = origPositions[i1 * 3 + 1];
         const y0_2 = origPositions[i2 * 3 + 1];
 
-        // If all 3 vertices are below crotch, omit this triangle so the static limbs do not duplicate articulated IK limbs
-        if (y0_0 < standingCrotchY && y0_1 < standingCrotchY && y0_2 < standingCrotchY) {
+        // Keep the entire pelvic seat, groin, buttocks, and upper hip cuffs 100% solid (cutoff at 0.68m)
+        const legCullY = isFemale ? 0.68 : 0.70;
+        if (y0_0 < legCullY && y0_1 < legCullY && y0_2 < legCullY) {
           continue;
         }
         keptIndices.push(i0, i1, i2);
@@ -619,8 +648,9 @@ export function generateAnimatedCyclistCircuit(
   const steerAxis = new THREE.Vector3().subVectors(headTubeTop, headTubeBottom).normalize();
   const frontAxleRelSteer = new THREE.Vector3().subVectors(frontAxle, headTubeBottom);
 
-  // Keyframe buffers for 7 bicycle items
+  // Keyframe buffers for 8 bicycle items
   const frameKeyframes: Keyframe[] = [];
+  const saddleKeyframes: Keyframe[] = [];
   const cockpitKeyframes: Keyframe[] = [];
   const frontWheelKeyframes: Keyframe[] = [];
   const rearWheelKeyframes: Keyframe[] = [];
@@ -651,6 +681,16 @@ export function generateAnimatedCyclistCircuit(
     );
 
     frameKeyframes.push({
+      frame: f,
+      transform: {
+        position: [P_frame.x, P_frame.y, P_frame.z],
+        rotation: [rollAngle, yawAngle, pitchAngle],
+        scale: [1, 1, 1],
+      },
+      interpolation: 'linear',
+    });
+
+    saddleKeyframes.push({
       frame: f,
       transform: {
         position: [P_frame.x, P_frame.y, P_frame.z],
@@ -899,6 +939,7 @@ export function generateAnimatedCyclistCircuit(
 
   const tracks: AnimationTrack[] = [
     { objectId: modularBicycle.frameItem.id, keyframes: frameKeyframes },
+    { objectId: modularBicycle.saddleItem.id, keyframes: saddleKeyframes },
     { objectId: modularBicycle.cockpitItem.id, keyframes: cockpitKeyframes },
     { objectId: modularBicycle.frontWheelItem.id, keyframes: frontWheelKeyframes },
     { objectId: modularBicycle.rearWheelItem.id, keyframes: rearWheelKeyframes },

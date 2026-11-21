@@ -247,11 +247,11 @@ describe('PolyForge Model Context Protocol (MCP) Server', () => {
     expect(res.result.isError).toBe(false);
     const data = JSON.parse(res.result.content[0].text);
     expect(data.message).toContain('animated closed-circuit bicycle');
-    expect(data.componentsCount).toBe(7);
-    expect(data.tracksCount).toBe(7);
+    expect(data.componentsCount).toBe(8);
+    expect(data.tracksCount).toBe(8);
     expect(data.totalFrames).toBe(360);
-    expect(server.state.items.length).toBe(7);
-    expect(server.state.tracks.length).toBe(7);
+    expect(server.state.items.length).toBe(8);
+    expect(server.state.tracks.length).toBe(8);
   });
 
   it('generates realistic anatomical human with clothing and accessories via MCP tool call', async () => {

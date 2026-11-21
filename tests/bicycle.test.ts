@@ -214,17 +214,18 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
     }
   });
 
-  it('generates a modular bicycle with 7 articulatable assemblies and localized pivots', () => {
+  it('generates a modular bicycle with 8 articulatable assemblies and localized pivots', () => {
     const modular = generateModularBicycle();
 
     expect(modular.frameItem).toBeDefined();
+    expect(modular.saddleItem).toBeDefined();
     expect(modular.cockpitItem).toBeDefined();
     expect(modular.frontWheelItem).toBeDefined();
     expect(modular.rearWheelItem).toBeDefined();
     expect(modular.cranksetItem).toBeDefined();
     expect(modular.leftPedalItem).toBeDefined();
     expect(modular.rightPedalItem).toBeDefined();
-    expect(modular.allItems.length).toBe(7);
+    expect(modular.allItems.length).toBe(8);
 
     expect(modular.stats.totalTriangles).toBeGreaterThan(4000);
     expect(modular.stats.totalVertices).toBeGreaterThan(4000);
@@ -248,8 +249,8 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
       gearRatio: 2.4,
     });
 
-    expect(circuit.items.length).toBe(7);
-    expect(circuit.tracks.length).toBe(7);
+    expect(circuit.items.length).toBe(8);
+    expect(circuit.tracks.length).toBe(8);
     expect(circuit.totalFrames).toBe(360);
     expect(circuit.trajectory.length).toBe(361);
 
@@ -346,6 +347,6 @@ describe('Mechanical Engine & Realistic Bicycle Generator', () => {
 
     expect(gltf.animations).toBeDefined();
     expect(gltf.animations.length).toBe(1);
-    expect(gltf.animations[0].channels.length).toBe(21); // 7 parts x 3 channels (pos, rot, scale)
+    expect(gltf.animations[0].channels.length).toBe(24); // 8 parts x 3 channels (pos, rot, scale)
   });
 });

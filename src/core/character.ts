@@ -1241,11 +1241,6 @@ export function generateRealisticFemaleScene(
 
       // Tailor shirt: clean neckline, relaxed feminine shoulders, smooth hemline
       if (id === 'female-top') {
-        // Flatten upright collar points down towards clavicles
-        if (py >= 1.34 && py <= 1.45 && Math.abs(px) < 0.12 && pz > 0.02) {
-          py = 1.33 + (py - 1.34) * 0.45;
-          pz -= 0.006;
-        }
         // Relax masculine shoulder pads
         if (py >= 1.28 && py <= 1.38 && Math.abs(px) > 0.14) {
           py -= 0.012;
