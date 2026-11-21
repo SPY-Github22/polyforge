@@ -29,6 +29,7 @@ import {
 } from './core/io';
 import { generateAnimatedBicycleCircuit } from './core/bicycle';
 import { generateRealisticHumanScene } from './core/character';
+import { importModelFromFile } from './core/modelImporter';
 import { history } from './core/history';
 import { TopNavbar } from './components/TopNavbar';
 import { LeftToolbar } from './components/LeftToolbar';
@@ -516,6 +517,46 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleImportModel = async (file: File) => {
+    try {
+      const result = await importModelFromFile(file, {
+        autoCenter: true,
+        autoScale: true,
+        targetMaxDimension: 3.5,
+      });
+
+      if (result.items.length === 0) {
+        alert(`No valid 3D meshes found in ${file.name}.`);
+        return;
+      }
+
+      const importedIds = new Set(result.items.map((it) => it.id));
+      history.execute({
+        name: `Import ${file.name}`,
+        undo: () => {
+          setSceneItems((prev) => prev.filter((it) => !importedIds.has(it.id)));
+          setSelectedId(null);
+        },
+        redo: () => {
+          setSceneItems((prev) => {
+            const filtered = prev.filter((it) => it.id !== 'default-cube');
+            return [...filtered, ...result.items];
+          });
+          setSelectedId(result.items[0].id);
+        },
+      });
+
+      setSelectedId(result.items[0].id);
+
+      if (engineRef.current) {
+        engineRef.current.syncSceneItems(result.items);
+        engineRef.current.focusObject(result.items[0].id);
+      }
+    } catch (err) {
+      alert(`Failed to import 3D model: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const handleExportGLTF = (binary: boolean) => {
     if (engineRef.current) {
       const clip = tracks.length > 0 ? convertPolyforgeTracksToAnimationClip(sceneItems, tracks, timelineState.fps) : null;
@@ -758,6 +799,7 @@ export const App: React.FC = () => {
         onToggleAI={() => setIsAIOpen((prev) => !prev)}
         onAddAnimatedBicycle={handleAddAnimatedBicycle}
         onAddRealisticHuman={handleAddRealisticHuman}
+        onImportModel={handleImportModel}
       />
 
       {/* Main Workspace Row: Toolbar + Viewport + Inspector */}

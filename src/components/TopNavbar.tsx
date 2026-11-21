@@ -16,6 +16,7 @@ import {
   Shapes,
   Sparkles,
   Bot,
+  Upload,
 } from 'lucide-react';
 import { CameraView, PrimitiveType, ShadingMode } from '../types';
 
@@ -43,6 +44,7 @@ interface TopNavbarProps {
   onToggleAI: () => void;
   onAddAnimatedBicycle?: () => void;
   onAddRealisticHuman?: () => void;
+  onImportModel?: (file: File) => void;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
@@ -69,9 +71,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onToggleAI,
   onAddAnimatedBicycle,
   onAddRealisticHuman,
+  onImportModel,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelInputRef = useRef<HTMLInputElement>(null);
 
   // Close menus when clicking outside
   useEffect(() => {
@@ -93,6 +97,14 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     }
   };
 
+  const handleModelInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onImportModel) {
+      onImportModel(file);
+      e.target.value = '';
+    }
+  };
+
   return (
     <header className="h-12 bg-studio-900 border-b border-studio-750 px-3 flex items-center justify-between select-none z-50 text-xs">
       {/* Hidden file input for project open */}
@@ -102,6 +114,14 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
         accept=".json"
         className="hidden"
         onChange={handleFileInputChange}
+      />
+      {/* Hidden file input for 3D model import (.obj, .gltf, .glb, .stl) */}
+      <input
+        ref={modelInputRef}
+        type="file"
+        accept=".obj,.gltf,.glb,.stl"
+        className="hidden"
+        onChange={handleModelInputChange}
       />
 
       {/* Left side: Logo & Menus */}
@@ -156,6 +176,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     <FolderOpen size={13} /> Open Project...
                   </span>
                   <span className="text-[10px] text-slate-500">Ctrl+O</span>
+                </button>
+                <button
+                  onClick={() => {
+                    modelInputRef.current?.click();
+                    setActiveMenu(null);
+                  }}
+                  className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center justify-between text-indigo-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Upload size={13} /> Import 3D Model...
+                  </span>
+                  <span className="text-[10px] text-slate-500">OBJ/GLTF/STL</span>
                 </button>
                 <button
                   onClick={() => {
