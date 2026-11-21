@@ -80,6 +80,8 @@ describe('Procedural 3D & Animation Generators', () => {
     expect(matchProceduralTemplate('Towering sci-fi skyscraper with glowing rings').id).toBe('sci-fi-citadel');
     expect(matchProceduralTemplate('make a model of a human with clothes and accessories').id).toBe('realistic-human');
     expect(matchProceduralTemplate('create a 3D avatar person with jacket and trousers').id).toBe('realistic-human');
+    expect(matchProceduralTemplate('make a model of a female character with streetwear').id).toBe('realistic-female');
+    expect(matchProceduralTemplate('generate a 3D woman avatar with jeans and sneakers').id).toBe('realistic-female');
   });
 
   it('generates Realistic Anatomical Human via template with white viewport background', () => {
@@ -92,6 +94,18 @@ describe('Procedural 3D & Animation Generators', () => {
     expect(result.environment?.backgroundColor).toBe('#ffffff');
     expect(result.environment?.preset).toBe('studio');
     expect(result.description).toContain('procedurally synthesized 3D human character');
+  });
+
+  it('generates Realistic Anatomical Female via template with studio environment', () => {
+    const tmpl = PROCEDURAL_TEMPLATES['realistic-female'];
+    expect(tmpl).toBeDefined();
+    expect(tmpl.category).toBe('Character');
+
+    const result = tmpl.generate();
+    expect(result.items.length).toBe(5);
+    expect(result.environment?.backgroundColor).toBe('#ffffff');
+    expect(result.environment?.preset).toBe('studio');
+    expect(result.description).toContain('procedurally synthesized 3D female character');
   });
 
   it('all registered templates can be invoked without errors', () => {

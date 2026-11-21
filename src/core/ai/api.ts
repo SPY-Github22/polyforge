@@ -19,7 +19,12 @@ import { insertOrUpdateKeyframe, ClosedCircuitOptions } from '../animation';
 import { PROCEDURAL_TEMPLATES } from './procedural';
 import { BotanicalTreeOptions, generateBotanicalOakTree } from '../botany';
 import { BicycleOptions, generateRealisticBicycle, generateAnimatedBicycleCircuit } from '../bicycle';
-import { RealisticHumanOptions, generateRealisticHumanScene } from '../character';
+import {
+  RealisticHumanOptions,
+  RealisticFemaleOptions,
+  generateRealisticHumanScene,
+  generateRealisticFemaleScene,
+} from '../character';
 
 const DEFAULT_SCRIPT_MATERIAL: MaterialProperties = {
   color: '#388bfd',
@@ -141,6 +146,16 @@ export function createPolyForgeScriptAPI(
         createdItems.push(item);
       }
       logs.push(`[Anatomy] Generated realistic human: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris across ${result.allItems.length} sub-assemblies.`);
+      return result.allItems;
+    },
+
+    createFemaleHuman: (options?: RealisticFemaleOptions): SceneItem[] => {
+      const result = generateRealisticFemaleScene(options);
+      for (const item of result.allItems) {
+        context.items.push(item);
+        createdItems.push(item);
+      }
+      logs.push(`[Anatomy] Generated realistic female human: ${result.stats.totalVertices} verts, ${result.stats.totalTriangles} tris across ${result.allItems.length} sub-assemblies.`);
       return result.allItems;
     },
 

@@ -12,7 +12,7 @@ import {
 import { BotanicalTreeOptions } from '../botany';
 import { BicycleOptions } from '../bicycle';
 import { ClosedCircuitOptions } from '../animation';
-import { RealisticHumanOptions } from '../character';
+import { RealisticHumanOptions, RealisticFemaleOptions } from '../character';
 
 export type ProceduralTemplateId =
   | 'sci-fi-citadel'
@@ -23,7 +23,8 @@ export type ProceduralTemplateId =
   | 'procedural-biome'
   | 'spiral-pavilion'
   | 'realistic-bicycle'
-  | 'realistic-human';
+  | 'realistic-human'
+  | 'realistic-female';
 
 export interface CreateObjectOptions {
   id?: string;
@@ -69,6 +70,7 @@ export interface PolyForgeScriptAPI {
   createBicycle: (options?: BicycleOptions) => SceneItem[];
   createAnimatedBicycle: (options?: BicycleOptions & ClosedCircuitOptions) => { items: SceneItem[]; tracks: AnimationTrack[] };
   createHuman: (options?: RealisticHumanOptions) => SceneItem[];
+  createFemaleHuman: (options?: RealisticFemaleOptions) => SceneItem[];
   createCustomMesh: (options: {
     name?: string;
     positions: number[];

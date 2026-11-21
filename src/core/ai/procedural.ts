@@ -10,7 +10,7 @@ import {
   ProceduralTemplateId,
 } from './types';
 import { generateRealisticBicycle } from '../bicycle';
-import { generateRealisticHumanScene } from '../character';
+import { generateRealisticHumanScene, generateRealisticFemaleScene } from '../character';
 
 // Helper to create a unique ID
 function makeId(prefix: string): string {
@@ -1223,6 +1223,38 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
       };
     },
   },
+  'realistic-female': {
+    id: 'realistic-female',
+    name: 'Realistic Anatomical Female',
+    category: 'Character',
+    description: 'Procedurally generated realistic 3D female human model with organic feminine anatomical morphology (~1.68m tall), delicate facial contouring, shoulder-length contoured layered hair, fitted casual streetwear (scoop top, high-waisted denim jeans, sculpted sneakers), and wristwatch.',
+    tags: ['female', 'woman', 'girl', 'lady', 'human', 'character', 'avatar', 'body', 'anatomy', 'clothes', 'streetwear'],
+    generate: () => {
+      const result = generateRealisticFemaleScene();
+      return {
+        description: 'Ultra-realistic procedurally synthesized 3D female character with delicate facial features, shoulder-length hair, feminine hourglass silhouette (~1.68m height), fitted streetwear top, high-waisted denim jeans, and sneakers.',
+        items: result.allItems,
+        tracks: [],
+        timeline: {
+          currentFrame: 0,
+          totalFrames: 120,
+          fps: 30,
+          isPlaying: false,
+          isLooping: true,
+          autoKeying: false,
+        },
+        environment: {
+          backgroundColor: '#ffffff',
+          ambientIntensity: 0.8,
+          directionalIntensity: 1.5,
+          showGrid: true,
+          showAxes: true,
+          shadows: true,
+          preset: 'studio',
+        },
+      };
+    },
+  },
 };
 
 /**
@@ -1231,7 +1263,10 @@ export const PROCEDURAL_TEMPLATES: Record<ProceduralTemplateId, ProceduralTempla
 export function matchProceduralTemplate(query: string): ProceduralTemplate {
   const q = query.toLowerCase();
 
-  if (q.includes('human') || q.includes('person') || q.includes('character') || q.includes('man') || q.includes('woman') || q.includes('avatar') || q.includes('anatomy') || q.includes('body') || q.includes('people')) {
+  if (q.includes('female') || q.includes('woman') || q.includes('girl') || q.includes('lady')) {
+    return PROCEDURAL_TEMPLATES['realistic-female'];
+  }
+  if (q.includes('human') || q.includes('person') || q.includes('character') || q.includes('man') || q.includes('avatar') || q.includes('anatomy') || q.includes('body') || q.includes('people')) {
     return PROCEDURAL_TEMPLATES['realistic-human'];
   }
   if (q.includes('bike') || q.includes('bicycle') || q.includes('cycle') || q.includes('cycling') || q.includes('drivetrain')) {

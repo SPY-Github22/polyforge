@@ -44,6 +44,7 @@ interface TopNavbarProps {
   onToggleAI: () => void;
   onAddAnimatedBicycle?: () => void;
   onAddRealisticHuman?: () => void;
+  onAddRealisticFemale?: () => void;
   onImportModel?: (file: File) => void;
 }
 
@@ -71,6 +72,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onToggleAI,
   onAddAnimatedBicycle,
   onAddRealisticHuman,
+  onAddRealisticFemale,
   onImportModel,
 }) => {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -369,7 +371,19 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                         className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center gap-2 text-indigo-400 font-medium"
                       >
                         <Sparkles size={12} className="text-indigo-400" />
-                        Realistic Human Character
+                        Realistic Male Character
+                      </button>
+                    )}
+                    {onAddRealisticFemale && (
+                      <button
+                        onClick={() => {
+                          onAddRealisticFemale();
+                          setActiveMenu(null);
+                        }}
+                        className="w-full text-left px-3 py-1.5 hover:bg-studio-800 flex items-center gap-2 text-rose-400 font-medium"
+                      >
+                        <Sparkles size={12} className="text-rose-400" />
+                        Realistic Female Character
                       </button>
                     )}
                     <button

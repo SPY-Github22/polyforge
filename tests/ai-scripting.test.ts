@@ -190,7 +190,7 @@ describe('AI Scripting Engine & API', () => {
     expect(res.success).toBe(true);
     expect(res.items.length).toBeGreaterThan(5);
     expect(res.tracks.length).toBeGreaterThan(0);
-    expect(res.logs.some((l) => l.includes('Found templates: 9'))).toBe(true);
+    expect(res.logs.some((l) => l.includes('Found templates: 10'))).toBe(true);
   });
 
   it('generates mechanical bicycle directly via polyforge.createBicycle() in sandbox', async () => {
@@ -249,6 +249,31 @@ describe('AI Scripting Engine & API', () => {
     expect(res.items.length).toBe(5);
     expect(res.logs.some((l) => l.includes('Human sub-assemblies: 5'))).toBe(true);
     expect(res.items[0].name).toContain('Human Anatomy');
+    expect(res.items[1].name).toContain('Upper Garment');
+    expect(res.items[2].name).toContain('Lower Garment');
+    expect(res.items[3].name).toContain('Footwear');
+    expect(res.items[4].name).toContain('Accessories');
+  });
+
+  it('generates realistic anatomical female with casual streetwear via polyforge.createFemaleHuman()', async () => {
+    const ctx = createTestContext();
+    const script = `
+      polyforge.clearScene();
+      const femaleItems = polyforge.createFemaleHuman({
+        includeClothing: true,
+        includeAccessories: true,
+        topColor: '#e11d48',
+        pantsColor: '#1e293b',
+        shoesColor: '#ffffff',
+      });
+      polyforge.log('Female sub-assemblies: ' + femaleItems.length);
+    `;
+
+    const res = await executePolyForgeScript(script, ctx);
+    expect(res.success).toBe(true);
+    expect(res.items.length).toBe(5);
+    expect(res.logs.some((l) => l.includes('Female sub-assemblies: 5'))).toBe(true);
+    expect(res.items[0].name).toContain('Female Anatomy');
     expect(res.items[1].name).toContain('Upper Garment');
     expect(res.items[2].name).toContain('Lower Garment');
     expect(res.items[3].name).toContain('Footwear');
