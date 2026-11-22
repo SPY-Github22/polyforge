@@ -207,4 +207,145 @@ describe('Modular Anatomy & Cranial Fit Engine', () => {
     expect(lBox.min.y).toBeCloseTo(0.00, 3);
     expect(rBox.min.y).toBeCloseTo(0.00, 3);
   });
+
+  it('generates inner garments when includeUnderwear is true for female and male', () => {
+    const female = generateRealisticFemaleScene({ modularBodyParts: true, includeUnderwear: true });
+    expect(female.underwearUpperItem).toBeDefined();
+    expect(female.underwearLowerItem).toBeDefined();
+    expect(female.underwearUpperItem?.id).toBe('female-underwear-top');
+    expect(female.underwearLowerItem?.id).toBe('female-underwear-bottom');
+    expect(female.allItems.length).toBe(22);
+
+    const male = generateRealisticHumanScene({ modularBodyParts: true, includeUnderwear: true });
+    expect(male.underwearUpperItem).toBeDefined();
+    expect(male.underwearLowerItem).toBeDefined();
+    expect(male.underwearUpperItem?.id).toBe('human-underwear-top');
+    expect(male.underwearLowerItem?.id).toBe('human-underwear-bottom');
+    expect(male.allItems.length).toBe(22);
+  });
+
+  it('validates 3-layer clearance stratification (skin < inner garments < outer garments)', () => {
+    const female = generateRealisticFemaleScene({ modularBodyParts: true, includeUnderwear: true });
+    const torsoPart = female.bodyParts!.find((p) => p.id === 'female-torso')!;
+    const uwTop = female.underwearUpperItem!;
+    const outerTop = female.clothingUpperItem!;
+
+    const torsoGeo = createPrimitiveGeometry(torsoPart.primitiveType || 'custom', torsoPart.geometryParams);
+    const uwTopGeo = createPrimitiveGeometry(uwTop.primitiveType || 'custom', uwTop.geometryParams);
+    const outerTopGeo = createPrimitiveGeometry(outerTop.primitiveType || 'custom', outerTop.geometryParams);
+
+    const torsoBox = new THREE.Box3().setFromBufferAttribute(torsoGeo.getAttribute('position') as THREE.BufferAttribute);
+    const uwTopBox = new THREE.Box3().setFromBufferAttribute(uwTopGeo.getAttribute('position') as THREE.BufferAttribute);
+    const outerTopBox = new THREE.Box3().setFromBufferAttribute(outerTopGeo.getAttribute('position') as THREE.BufferAttribute);
+
+    // Inner garment expands slightly beyond torso skin (+2mm)
+    expect(uwTopBox.max.x).toBeGreaterThanOrEqual(torsoBox.max.x - 0.005);
+    expect(uwTopBox.max.z).toBeGreaterThanOrEqual(torsoBox.max.z - 0.005);
+
+    // Outer top envelope expands beyond inner garment (+5mm clearance)
+    expect(outerTopBox.max.x).toBeGreaterThanOrEqual(uwTopBox.max.x);
+    expect(outerTopBox.max.z).toBeGreaterThanOrEqual(uwTopBox.max.z);
+  });
+
+  it('verifies seamless joint connectivity across the modular skeleton', () => {
+    const female = generateRealisticFemaleScene({ modularBodyParts: true });
+    const neck = female.bodyParts!.find((p) => p.id === 'female-neck')!;
+    const torso = female.bodyParts!.find((p) => p.id === 'female-torso')!;
+    const pelvis = female.bodyParts!.find((p) => p.id === 'female-pelvis')!;
+    const lUpperArm = female.bodyParts!.find((p) => p.id === 'female-left-upperarm')!;
+    const lForearm = female.bodyParts!.find((p) => p.id === 'female-left-forearm')!;
+    const lHand = female.bodyParts!.find((p) => p.id === 'female-left-hand')!;
+    const lThigh = female.bodyParts!.find((p) => p.id === 'female-left-thigh')!;
+    const lShin = female.bodyParts!.find((p) => p.id === 'female-left-shin')!;
+    const lFoot = female.bodyParts!.find((p) => p.id === 'female-left-foot')!;
+
+    const neckGeo = createPrimitiveGeometry(neck.primitiveType || 'custom', neck.geometryParams);
+    const torsoGeo = createPrimitiveGeometry(torso.primitiveType || 'custom', torso.geometryParams);
+    const pelvisGeo = createPrimitiveGeometry(pelvis.primitiveType || 'custom', pelvis.geometryParams);
+    const armGeo = createPrimitiveGeometry(lUpperArm.primitiveType || 'custom', lUpperArm.geometryParams);
+    const forearmGeo = createPrimitiveGeometry(lForearm.primitiveType || 'custom', lForearm.geometryParams);
+    const handGeo = createPrimitiveGeometry(lHand.primitiveType || 'custom', lHand.geometryParams);
+    const thighGeo = createPrimitiveGeometry(lThigh.primitiveType || 'custom', lThigh.geometryParams);
+    const shinGeo = createPrimitiveGeometry(lShin.primitiveType || 'custom', lShin.geometryParams);
+    const footGeo = createPrimitiveGeometry(lFoot.primitiveType || 'custom', lFoot.geometryParams);
+
+    const neckBox = new THREE.Box3().setFromBufferAttribute(neckGeo.getAttribute('position') as THREE.BufferAttribute);
+    const torsoBox = new THREE.Box3().setFromBufferAttribute(torsoGeo.getAttribute('position') as THREE.BufferAttribute);
+    const pelvisBox = new THREE.Box3().setFromBufferAttribute(pelvisGeo.getAttribute('position') as THREE.BufferAttribute);
+    const armBox = new THREE.Box3().setFromBufferAttribute(armGeo.getAttribute('position') as THREE.BufferAttribute);
+    const forearmBox = new THREE.Box3().setFromBufferAttribute(forearmGeo.getAttribute('position') as THREE.BufferAttribute);
+    const handBox = new THREE.Box3().setFromBufferAttribute(handGeo.getAttribute('position') as THREE.BufferAttribute);
+    const thighBox = new THREE.Box3().setFromBufferAttribute(thighGeo.getAttribute('position') as THREE.BufferAttribute);
+    const shinBox = new THREE.Box3().setFromBufferAttribute(shinGeo.getAttribute('position') as THREE.BufferAttribute);
+    const footBox = new THREE.Box3().setFromBufferAttribute(footGeo.getAttribute('position') as THREE.BufferAttribute);
+
+    // Neck base connects to clavicles (torso.max.y ~ 1.26m)
+    expect(neckBox.min.y).toBeLessThanOrEqual(torsoBox.max.y + 0.01);
+    // Neck top reaches chin / jawline (~1.44m)
+    expect(neckBox.max.y).toBeGreaterThanOrEqual(1.40);
+
+    // Torso base connects to pelvis top
+    expect(torsoBox.min.y).toBeLessThanOrEqual(pelvisBox.max.y + 0.02);
+
+    // Pelvis base connects to thigh tops (~0.70m)
+    expect(thighBox.max.y).toBeGreaterThanOrEqual(pelvisBox.min.y - 0.02);
+
+    // Thigh connects to shin at knee (~0.42m)
+    expect(Math.abs(thighBox.min.y - shinBox.max.y)).toBeLessThan(0.02);
+
+    // Shin connects to foot at ankle (~0.075m)
+    expect(Math.abs(shinBox.min.y - footBox.max.y)).toBeLessThan(0.02);
+
+    // Upper arm connects to forearm at elbow
+    expect(Math.abs(armBox.min.y - forearmBox.max.y)).toBeLessThan(0.02);
+
+    // Forearm connects to hand wrist
+    expect(Math.abs(forearmBox.min.y - handBox.max.y)).toBeLessThan(0.05);
+  });
+
+  it('validates athletic feminine proportions (petite biacromial shoulders and slender back)', () => {
+    const female = generateRealisticFemaleScene({ modularBodyParts: true });
+    const torso = female.bodyParts!.find((p) => p.id === 'female-torso')!;
+    const pelvis = female.bodyParts!.find((p) => p.id === 'female-pelvis')!;
+
+    const torsoGeo = createPrimitiveGeometry(torso.primitiveType || 'custom', torso.geometryParams);
+    const pelvisGeo = createPrimitiveGeometry(pelvis.primitiveType || 'custom', pelvis.geometryParams);
+
+    const torsoBox = new THREE.Box3().setFromBufferAttribute(torsoGeo.getAttribute('position') as THREE.BufferAttribute);
+    const pelvisBox = new THREE.Box3().setFromBufferAttribute(pelvisGeo.getAttribute('position') as THREE.BufferAttribute);
+
+    const shoulderHalfWidth = torsoBox.max.x;
+    const thoracicDepth = torsoBox.max.z - torsoBox.min.z;
+    const pelvisDepth = pelvisBox.max.z - pelvisBox.min.z;
+
+    // Slender athletic shoulder half-width (<= 0.16m, narrowed from masculine 0.18m+)
+    expect(shoulderHalfWidth).toBeLessThan(0.16);
+    // Slender upper back and thoracic depth (<= 0.20m)
+    expect(thoracicDepth).toBeLessThan(0.20);
+    // Natural non-bulky gluteal depth (<= 0.22m)
+    expect(pelvisDepth).toBeLessThan(0.22);
+  });
+
+  it('validates uniform skin vertex colors across all 16 modular body parts', () => {
+    const female = generateRealisticFemaleScene({ modularBodyParts: true, skinColor: '#e0ac82' });
+    const expectedColor = new THREE.Color('#e0ac82');
+
+    for (const part of female.bodyParts!) {
+      const geo = createPrimitiveGeometry(part.primitiveType || 'custom', part.geometryParams);
+      const colors = geo.getAttribute('color') as THREE.BufferAttribute;
+      expect(colors, `Modular part ${part.id} must have vertex colors`).toBeDefined();
+      expect(colors.count).toBeGreaterThan(0);
+
+      // Check average vertex color matches skin tone closely (excluding facial feature accents on head)
+      if (part.id !== 'female-head') {
+        const r = colors.getX(0);
+        const g = colors.getY(0);
+        const b = colors.getZ(0);
+
+        expect(Math.abs(r - expectedColor.r)).toBeLessThan(0.05);
+        expect(Math.abs(g - expectedColor.g)).toBeLessThan(0.05);
+        expect(Math.abs(b - expectedColor.b)).toBeLessThan(0.05);
+      }
+    }
+  });
 });

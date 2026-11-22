@@ -55,8 +55,10 @@ export const Viewport: React.FC<ViewportProps> = ({
   const canvasHolderRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  const isUnderwear = (id: string) => id.includes('underwear');
+
   const isBodyPart = (id: string) =>
-    id === 'female-body' ||
+    (id === 'female-body' ||
     id === 'human-body' ||
     id === 'male-body' ||
     (id.startsWith('female-') &&
@@ -64,18 +66,21 @@ export const Viewport: React.FC<ViewportProps> = ({
     (id.startsWith('male-') &&
       !['male-shirt', 'male-pants', 'male-shoes', 'male-accessories'].includes(id)) ||
     (id.startsWith('human-') &&
-      !['human-shirt', 'human-pants', 'human-shoes', 'human-accessories'].includes(id));
+      !['human-shirt', 'human-pants', 'human-shoes', 'human-accessories'].includes(id))) &&
+    !isUnderwear(id);
 
-  const isClothing = (id: string) =>
-    id.includes('top') ||
+  const isOuterClothing = (id: string) =>
+    !isUnderwear(id) &&
+    (id.includes('top') ||
     id.includes('shirt') ||
     id.includes('jeans') ||
     id.includes('pants') ||
     id.includes('sneakers') ||
-    id.includes('shoes');
+    id.includes('shoes'));
 
   const characterBodyItems = sceneItems?.filter((it) => isBodyPart(it.id)) || [];
-  const characterClothesItems = sceneItems?.filter((it) => isClothing(it.id)) || [];
+  const characterUnderwearItems = sceneItems?.filter((it) => isUnderwear(it.id)) || [];
+  const characterClothesItems = sceneItems?.filter((it) => isOuterClothing(it.id)) || [];
 
   const hiddenCount = sceneItems ? sceneItems.filter((it) => !it.visible).length : 0;
 
@@ -245,8 +250,8 @@ export const Viewport: React.FC<ViewportProps> = ({
         </div>
       )}
 
-      {/* Quick Character Anatomy & Garment Visibility Toggles */}
-      {(characterBodyItems.length > 0 || characterClothesItems.length > 0) && (
+      {/* Quick Character Anatomy, Underwear & Garment Visibility Toggles */}
+      {(characterBodyItems.length > 0 || characterUnderwearItems.length > 0 || characterClothesItems.length > 0) && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 bg-studio-900/90 border border-studio-700/60 px-2.5 py-1 rounded-xl shadow-xl backdrop-blur-md z-10 text-xs">
           {characterBodyItems.length > 0 && onToggleVisibility && (
             <button
@@ -267,6 +272,27 @@ export const Viewport: React.FC<ViewportProps> = ({
             >
               {characterBodyItems.some((b) => b.visible) ? <Eye size={12} className="text-emerald-400" /> : <EyeOff size={12} className="text-amber-400" />}
               <span>Body: {characterBodyItems.some((b) => b.visible) ? 'Visible' : 'Hidden'}</span>
+            </button>
+          )}
+          {characterUnderwearItems.length > 0 && onToggleVisibility && (
+            <button
+              onClick={() => {
+                const anyVisible = characterUnderwearItems.some((u) => u.visible);
+                characterUnderwearItems.forEach((u) => {
+                  if (anyVisible ? u.visible : !u.visible) {
+                    onToggleVisibility(u.id);
+                  }
+                });
+              }}
+              className={`px-2 py-0.5 rounded-lg flex items-center space-x-1.5 font-medium transition ${
+                characterUnderwearItems.some((u) => u.visible)
+                  ? 'bg-studio-800 text-slate-200 hover:bg-studio-700'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+              }`}
+              title={characterUnderwearItems.some((u) => u.visible) ? 'Hide Inner Garments' : 'Show Inner Garments'}
+            >
+              {characterUnderwearItems.some((u) => u.visible) ? <Eye size={12} className="text-purple-400" /> : <EyeOff size={12} className="text-amber-400" />}
+              <span>Underwear: {characterUnderwearItems.some((u) => u.visible) ? 'Visible' : 'Hidden'}</span>
             </button>
           )}
           {characterClothesItems.length > 0 && onToggleVisibility && (

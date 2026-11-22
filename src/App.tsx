@@ -561,8 +561,8 @@ export const App: React.FC = () => {
         if (rawJson && typeof rawJson === 'object' && !Array.isArray(rawJson.items) && rawJson.bodyVertices) {
           const isFemale = rawJson.height === 1.68 || file.name.toLowerCase().includes('female');
           const scene = isFemale
-            ? generateRealisticFemaleScene({ modularBodyParts: true })
-            : generateRealisticHumanScene({ modularBodyParts: true });
+            ? generateRealisticFemaleScene({ modularBodyParts: true, includeUnderwear: true })
+            : generateRealisticHumanScene({ modularBodyParts: true, includeUnderwear: true });
           items = scene.allItems;
         } else {
           const data = parseProjectFile(text);
@@ -699,7 +699,7 @@ export const App: React.FC = () => {
   };
 
   const handleAddRealisticHuman = () => {
-    const human = generateRealisticHumanScene({ modularBodyParts: true });
+    const human = generateRealisticHumanScene({ modularBodyParts: true, includeUnderwear: true });
     setSceneItems((prev) => {
       const filtered = prev.filter((it) => it.id !== 'default-cube');
       return [...filtered, ...human.allItems];
@@ -711,7 +711,7 @@ export const App: React.FC = () => {
   };
 
   const handleAddRealisticFemale = () => {
-    const female = generateRealisticFemaleScene({ modularBodyParts: true });
+    const female = generateRealisticFemaleScene({ modularBodyParts: true, includeUnderwear: true });
     setSceneItems((prev) => {
       const filtered = prev.filter((it) => it.id !== 'default-cube');
       return [...filtered, ...female.allItems];

@@ -8,6 +8,8 @@ import {
   generateOrganicLeg,
   generateOrganicFoot,
   generateOrganicNeck,
+  generateInnerGarmentTop,
+  generateInnerGarmentBottom,
   createSceneItemFromBuffer,
   extractSubmeshBuffer,
   mergeMeshBuffers,
@@ -28,6 +30,8 @@ import {
 export interface RealisticHumanOptions {
   gender?: 'male' | 'female';     // default 'male'
   includeClothing?: boolean;      // default true
+  includeUnderwear?: boolean;     // default false (when true, adds discrete inner garments)
+  underwearColor?: string;        // default '#1e293b' (boxer briefs & tank)
   includeAccessories?: boolean;   // default true
   includeGlasses?: boolean;       // default false (optional eyewear)
   modularBodyParts?: boolean;     // default false (when true, allItems contains 16 modular body parts)
@@ -44,6 +48,8 @@ export interface RealisticHumanOptions {
 
 export interface RealisticFemaleOptions {
   includeClothing?: boolean;      // default true
+  includeUnderwear?: boolean;     // default false (when true, adds discrete inner garments)
+  underwearColor?: string;        // default '#2b2d42' (athletic sports bra & briefs)
   includeAccessories?: boolean;   // default true
   includeGlasses?: boolean;       // default false (optional eyewear)
   modularBodyParts?: boolean;     // default false (when true, allItems contains 16 modular body parts)
@@ -64,6 +70,8 @@ export interface RealisticHumanResult {
   bodyParts?: SceneItem[];
   clothingUpperItem?: SceneItem;
   clothingLowerItem?: SceneItem;
+  underwearUpperItem?: SceneItem;
+  underwearLowerItem?: SceneItem;
   footwearItem?: SceneItem;
   accessoriesItem?: SceneItem;
   allItems: SceneItem[];
@@ -181,11 +189,12 @@ export function generateRealisticHumanScene(
       (allPos[v0 * 3 + 2] + allPos[v1 * 3 + 2] + allPos[v2 * 3 + 2] + allPos[v3 * 3 + 2]) * 0.25
     );
 
+    const qMinY = Math.min(baseVerts[v0 * 3 + 1], baseVerts[v1 * 3 + 1], baseVerts[v2 * 3 + 1], baseVerts[v3 * 3 + 1]);
     const avgY = (baseVerts[v0 * 3 + 1] + baseVerts[v1 * 3 + 1] + baseVerts[v2 * 3 + 1] + baseVerts[v3 * 3 + 1]) * 0.25;
     const avgX = (baseVerts[v0 * 3] + baseVerts[v1 * 3] + baseVerts[v2 * 3] + baseVerts[v3 * 3]) * 0.25;
 
     let targetTris: number[] | null = null;
-    if (avgY >= 1.40 && Math.abs(avgX) < 0.20) {
+    if (qMinY >= 1.515 && Math.abs(avgX) < 0.20) {
       targetTris = headTris;
     } else if (avgY < 1.05 && avgX < -0.16) {
       targetTris = lhTris;
@@ -335,19 +344,19 @@ export function generateRealisticHumanScene(
   const rhBuf = extractSubmeshBuffer(rhTris, allPos, allCols);
 
   // Generate organic anatomy sub-assemblies (male proportions, scale = 1.0)
-  const neckBuf = generateOrganicNeck('male', 1.0);
-  const torsoBuf = generateOrganicTorso('male', 1.0);
-  const pelvisBuf = generateOrganicPelvis('male', 1.0);
-  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', 1.0);
-  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', 1.0);
-  const lForearmBuf = generateOrganicArm('forearm', 'left', 1.0);
-  const rForearmBuf = generateOrganicArm('forearm', 'right', 1.0);
-  const lThighBuf = generateOrganicLeg('thigh', 'left', 1.0);
-  const rThighBuf = generateOrganicLeg('thigh', 'right', 1.0);
-  const lShinBuf = generateOrganicLeg('shin', 'left', 1.0);
-  const rShinBuf = generateOrganicLeg('shin', 'right', 1.0);
-  const lFootBuf = generateOrganicFoot('left', 1.0);
-  const rFootBuf = generateOrganicFoot('right', 1.0);
+  const neckBuf = generateOrganicNeck('male', 1.0, skinColor);
+  const torsoBuf = generateOrganicTorso('male', 1.0, skinColor);
+  const pelvisBuf = generateOrganicPelvis('male', 1.0, skinColor);
+  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', 1.0, 'male', skinColor);
+  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', 1.0, 'male', skinColor);
+  const lForearmBuf = generateOrganicArm('forearm', 'left', 1.0, 'male', skinColor);
+  const rForearmBuf = generateOrganicArm('forearm', 'right', 1.0, 'male', skinColor);
+  const lThighBuf = generateOrganicLeg('thigh', 'left', 1.0, 'male', skinColor);
+  const rThighBuf = generateOrganicLeg('thigh', 'right', 1.0, 'male', skinColor);
+  const lShinBuf = generateOrganicLeg('shin', 'left', 1.0, 'male', skinColor);
+  const rShinBuf = generateOrganicLeg('shin', 'right', 1.0, 'male', skinColor);
+  const lFootBuf = generateOrganicFoot('left', 1.0, 'male', skinColor);
+  const rFootBuf = generateOrganicFoot('right', 1.0, 'male', skinColor);
 
   const skinMaterial: MaterialProperties = {
     color: skinColor,
@@ -390,7 +399,7 @@ export function generateRealisticHumanScene(
     rUpperArmBuf, rForearmBuf, rhBuf,
     lThighBuf, lShinBuf, lFootBuf,
     rThighBuf, rShinBuf, rFootBuf,
-  ]);
+  ], skinColor);
 
   let bodyGeo = new THREE.BufferGeometry();
   bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(mergedBodyBuffer.positions, 3));
@@ -556,6 +565,47 @@ export function generateRealisticHumanScene(
   let clothingLowerItem: SceneItem | undefined;
   let footwearItem: SceneItem | undefined;
   let accessoriesItem: SceneItem | undefined;
+  let underwearUpperItem: SceneItem | undefined;
+  let underwearLowerItem: SceneItem | undefined;
+
+  const includeUnderwear = options.includeUnderwear ?? false;
+  const underwearColor = options.underwearColor || '#1e293b';
+
+  // 2. Inner Garments: Athletic Undershirt and Boxer Briefs (+2mm positive clearance)
+  const uwTopBuf = generateInnerGarmentTop('male', 1.0, underwearColor);
+  const uwBottomBuf = generateInnerGarmentBottom('male', 1.0, underwearColor);
+
+  const underwearMaterial: MaterialProperties = {
+    color: underwearColor,
+    roughness: 0.70,
+    metalness: 0.02,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    transmission: 0,
+    opacity: 1,
+    transparent: false,
+    wireframe: false,
+    texturePreset: 'knit_cotton',
+    vertexColors: false,
+  };
+
+  underwearUpperItem = createSceneItemFromBuffer(
+    'human-underwear-top',
+    'Inner Garment (Athletic Undershirt / Tank)',
+    uwTopBuf,
+    underwearMaterial
+  );
+
+  underwearLowerItem = createSceneItemFromBuffer(
+    'human-underwear-bottom',
+    'Inner Garment (Fitted Boxer Briefs)',
+    uwBottomBuf,
+    underwearMaterial
+  );
+
+  if (includeUnderwear) {
+    allItems.push(underwearUpperItem, underwearLowerItem);
+  }
 
   const upperQuads = decodeUint16(UPPER_SUIT_QUADS_B64);
   const lowerQuads = decodeUint16(LOWER_SUIT_QUADS_B64);
@@ -722,6 +772,8 @@ export function generateRealisticHumanScene(
     bodyParts,
     clothingUpperItem,
     clothingLowerItem,
+    underwearUpperItem,
+    underwearLowerItem,
     footwearItem,
     accessoriesItem,
     allItems,
@@ -807,35 +859,48 @@ export function generateRealisticFemaleScene(
       }
     }
 
-    // 3. Pelvic Hips & Gluteal Curvature (Gynoid hourglass flare: y in [0.70, 0.92])
+    // 3. Natural Pelvic Hips & Non-Exaggerated Gluteals (Athletic gynoid ratio: y in [0.70, 0.92])
     if (y >= 0.70 && y <= 0.92 && absX < 0.25) {
       const distY = Math.abs(y - 0.82);
       if (distY < 0.11) {
         const hFactor = Math.cos((distY / 0.11) * (Math.PI / 2)) ** 2;
-        x *= (1.0 + hFactor * 0.12);
+        x *= (1.0 + hFactor * 0.08);
         if (z < 0) {
-          z *= (1.0 + hFactor * 0.14);
+          z *= 0.98; // Slim down rear depth to natural athletic proportions (zero overhang)
+        } else {
+          z += hFactor * 0.028; // Conforms front of jeans and pelvis to organic female lower abdomen
         }
       }
     }
 
-    // 4. Narrower Biacromial Shoulder Width (y in [1.26, 1.42])
-    if (y >= 1.26 && y <= 1.42 && absX > 0.12 && absX <= 0.26) {
-      const distY = Math.abs(y - 1.34);
-      if (distY < 0.08) {
-        const sFactor = Math.cos((distY / 0.08) * (Math.PI / 2)) ** 2;
-        x -= side * sFactor * 0.018;
+    // 3b. Patellar Kneecap & Anterior Shin Clearance for Jeans (y in [0.24, 0.44])
+    if (y >= 0.24 && y <= 0.44 && absX >= 0.08 && absX <= 0.22 && z > -0.03) {
+      const kneeDist = Math.abs(y - 0.36);
+      if (kneeDist < 0.10) {
+        const kT = Math.cos((kneeDist / 0.10) * (Math.PI / 2)) ** 2;
+        z += kT * 0.016; // Conforms denim knee fabric over the patellar tendon with clean clearance
       }
     }
 
-    // Slender arms shift inward with smooth continuous falloff (zero step tearing)
-    if (y < 1.34 && absX > 0.18) {
-      const armWeight = Math.min(1.0, (absX - 0.18) / 0.06);
-      const shiftX = armWeight * 0.018;
+    // 4. Slender Biacromial Shoulder Width & Petite Upper Back (y in [1.18, 1.42])
+    if (y >= 1.18 && y <= 1.42 && absX > 0.08) {
+      const distY = Math.abs(y - 1.28);
+      if (distY < 0.14) {
+        const sFactor = Math.cos((distY / 0.14) * (Math.PI / 2)) ** 2;
+        x -= side * sFactor * 0.026; // Slender feminine shoulder span
+        if (z < 0) {
+          z *= (1.0 - sFactor * 0.12); // Slim down upper back bulk
+        }
+      }
+    }
+
+    // Slender arms shift inward to match petite shoulders (arm start at x = ±0.145)
+    if (y < 1.34 && absX > 0.14) {
+      const armWeight = Math.min(1.0, (absX - 0.14) / 0.08);
+      const shiftX = armWeight * 0.026;
       x -= side * shiftX;
-      const armCx = side * 0.26;
-      x = armCx + (x - armCx) * (1.0 - armWeight * 0.06);
-      z *= (1.0 - armWeight * 0.06);
+      // Preserve full cylindrical sleeve volume around organic arm
+      z += armWeight * 0.004;
     }
 
     // 5. Slender Graceful Neck Contour (y in [1.32, 1.42])
@@ -955,8 +1020,11 @@ export function generateRealisticFemaleScene(
       // Frontal hairline and youthful framing bangs: rests directly on forehead dome above eyebrows
       if (z > 0.015 && y >= 1.55 && y <= 1.66) {
         const frontT = Math.min(1.0, (1.66 - y) / 0.09);
-        y -= frontT * 0.018; // Drapes down toward brows
-        z += frontT * 0.010; // Rests in front of forehead skin
+        y -= frontT * 0.016; // Drapes down toward brows
+        const foreheadSkinZ = 0.043 + Math.max(0, 1.62 - y) * 0.035;
+        if (z < foreheadSkinZ + 0.003) {
+          z = foreheadSkinZ + 0.003;
+        }
       }
 
       // Temple locks: drape smoothly along sides of face in front of ears
@@ -1073,11 +1141,12 @@ export function generateRealisticFemaleScene(
       (allPos[v0 * 3 + 2] + allPos[v1 * 3 + 2] + allPos[v2 * 3 + 2] + allPos[v3 * 3 + 2]) * 0.25
     );
 
+    const qMinY = Math.min(baseVerts[v0 * 3 + 1], baseVerts[v1 * 3 + 1], baseVerts[v2 * 3 + 1], baseVerts[v3 * 3 + 1]);
     const avgY = (baseVerts[v0 * 3 + 1] + baseVerts[v1 * 3 + 1] + baseVerts[v2 * 3 + 1] + baseVerts[v3 * 3 + 1]) * 0.25;
     const avgX = (baseVerts[v0 * 3] + baseVerts[v1 * 3] + baseVerts[v2 * 3] + baseVerts[v3 * 3]) * 0.25;
 
     let targetTris: number[] | null = null;
-    if (avgY >= 1.34 && Math.abs(avgX) < 0.20) {
+    if (qMinY >= 1.435 && Math.abs(avgX) < 0.20) {
       targetTris = headTris;
     } else if (avgY < 1.05 && avgX < -0.15) {
       targetTris = lhTris;
@@ -1107,23 +1176,23 @@ export function generateRealisticFemaleScene(
     headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
-  // Athletic Sleek Ponytail flowing down the back anchored to occiput
+  // Athletic Sleek Ponytail flowing down the back anchored flush to occipital skull dome
   const ponyStartIdx = allPos.length / 3;
-  const ponyRings = 14;
-  const ponySegs = 16;
-  const ponyRoot = new THREE.Vector3(0, 1.550, -0.096);
-  const ponyTip = new THREE.Vector3(0, 1.350, -0.118);
+  const ponyRings = 16;
+  const ponySegs = 20;
+  const ponyRoot = new THREE.Vector3(0, 1.560, -0.125);
+  const ponyTip = new THREE.Vector3(0, 1.360, -0.128);
 
   for (let r = 0; r <= ponyRings; r++) {
     const t = r / ponyRings;
     const curCenter = new THREE.Vector3().lerpVectors(ponyRoot, ponyTip, t);
-    curCenter.z += Math.sin(t * Math.PI) * -0.018;
-    const curRad = 0.022 * (1.0 - t * 0.65);
+    curCenter.z += Math.sin(t * Math.PI) * -0.016;
+    const curRad = 0.024 * (1.0 - t * 0.60);
 
     for (let s = 0; s < ponySegs; s++) {
       const angle = (s / ponySegs) * Math.PI * 2;
       const px = curCenter.x + Math.cos(angle) * curRad;
-      const py = curCenter.y + Math.sin(angle) * curRad * 0.4;
+      const py = curCenter.y + Math.sin(angle) * curRad * 0.45;
       const pz = curCenter.z + Math.sin(angle) * curRad;
 
       const vIdx = allPos.length / 3;
@@ -1315,19 +1384,19 @@ export function generateRealisticFemaleScene(
   const rhBuf = extractSubmeshBuffer(rhTris, allPos, allCols);
 
   // Generate organic anatomy sub-assemblies (feminine proportions, scale = 1.68 / 1.78)
-  const neckBuf = generateOrganicNeck('female', fScale);
-  const torsoBuf = generateOrganicTorso('female', fScale);
-  const pelvisBuf = generateOrganicPelvis('female', fScale);
-  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', fScale);
-  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', fScale);
-  const lForearmBuf = generateOrganicArm('forearm', 'left', fScale);
-  const rForearmBuf = generateOrganicArm('forearm', 'right', fScale);
-  const lThighBuf = generateOrganicLeg('thigh', 'left', fScale);
-  const rThighBuf = generateOrganicLeg('thigh', 'right', fScale);
-  const lShinBuf = generateOrganicLeg('shin', 'left', fScale);
-  const rShinBuf = generateOrganicLeg('shin', 'right', fScale);
-  const lFootBuf = generateOrganicFoot('left', fScale);
-  const rFootBuf = generateOrganicFoot('right', fScale);
+  const neckBuf = generateOrganicNeck('female', fScale, skinColor);
+  const torsoBuf = generateOrganicTorso('female', fScale, skinColor);
+  const pelvisBuf = generateOrganicPelvis('female', fScale, skinColor);
+  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', fScale, 'female', skinColor);
+  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', fScale, 'female', skinColor);
+  const lForearmBuf = generateOrganicArm('forearm', 'left', fScale, 'female', skinColor);
+  const rForearmBuf = generateOrganicArm('forearm', 'right', fScale, 'female', skinColor);
+  const lThighBuf = generateOrganicLeg('thigh', 'left', fScale, 'female', skinColor);
+  const rThighBuf = generateOrganicLeg('thigh', 'right', fScale, 'female', skinColor);
+  const lShinBuf = generateOrganicLeg('shin', 'left', fScale, 'female', skinColor);
+  const rShinBuf = generateOrganicLeg('shin', 'right', fScale, 'female', skinColor);
+  const lFootBuf = generateOrganicFoot('left', fScale, 'female', skinColor);
+  const rFootBuf = generateOrganicFoot('right', fScale, 'female', skinColor);
 
   const skinMaterial: MaterialProperties = {
     color: skinColor,
@@ -1370,7 +1439,7 @@ export function generateRealisticFemaleScene(
     rUpperArmBuf, rForearmBuf, rhBuf,
     lThighBuf, lShinBuf, lFootBuf,
     rThighBuf, rShinBuf, rFootBuf,
-  ]);
+  ], skinColor);
 
   let bodyGeo = new THREE.BufferGeometry();
   bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(mergedBodyBuffer.positions, 3));
@@ -1468,9 +1537,6 @@ export function generateRealisticFemaleScene(
         if (py > 0.952 && Math.abs(px) < 0.22) {
           py = 0.962;
         }
-        if (py >= 0.70 && py <= 0.96 && pz < 0) {
-          pz -= 0.004;
-        }
       }
 
       positions.push(px, py, pz);
@@ -1482,11 +1548,11 @@ export function generateRealisticFemaleScene(
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
-    // Conformal normal extrusion (+5.0mm for tops, +4.5mm for jeans, +5.5mm for sneakers) ensuring 100% clean drapery over skin
+    // Conformal normal extrusion (+5.0mm for tops, +5.0mm for jeans, +5.5mm for sneakers) ensuring 100% clean drapery over skin
     if (id === 'female-top' || id === 'female-jeans' || id === 'female-sneakers') {
       const pAttr = geo.getAttribute('position') as THREE.BufferAttribute;
       const nAttr = geo.getAttribute('normal') as THREE.BufferAttribute;
-      const offset = id === 'female-top' ? 0.0050 : (id === 'female-jeans' ? 0.0045 : 0.0055);
+      const offset = id === 'female-top' ? 0.0055 : (id === 'female-jeans' ? 0.0055 : 0.0060);
       for (let i = 0; i < pAttr.count; i++) {
         pAttr.setXYZ(
           i,
@@ -1549,6 +1615,47 @@ export function generateRealisticFemaleScene(
   let clothingLowerItem: SceneItem | undefined;
   let footwearItem: SceneItem | undefined;
   let accessoriesItem: SceneItem | undefined;
+  let underwearUpperItem: SceneItem | undefined;
+  let underwearLowerItem: SceneItem | undefined;
+
+  const includeUnderwear = options.includeUnderwear ?? false;
+  const underwearColor = options.underwearColor || '#2b2d42';
+
+  // 2. Inner Garments: Athletic Sports Bra / Top and Briefs / Panties (+2mm positive clearance)
+  const uwTopBuf = generateInnerGarmentTop('female', fScale, underwearColor);
+  const uwBottomBuf = generateInnerGarmentBottom('female', fScale, underwearColor);
+
+  const underwearMaterial: MaterialProperties = {
+    color: underwearColor,
+    roughness: 0.65,
+    metalness: 0.05,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    transmission: 0,
+    opacity: 1,
+    transparent: false,
+    wireframe: false,
+    texturePreset: 'knit_cotton',
+    vertexColors: false,
+  };
+
+  underwearUpperItem = createSceneItemFromBuffer(
+    'female-underwear-top',
+    'Inner Garment (Athletic Sports Bra / Top)',
+    uwTopBuf,
+    underwearMaterial
+  );
+
+  underwearLowerItem = createSceneItemFromBuffer(
+    'female-underwear-bottom',
+    'Inner Garment (Fitted Athletic Briefs / Panties)',
+    uwBottomBuf,
+    underwearMaterial
+  );
+
+  if (includeUnderwear) {
+    allItems.push(underwearUpperItem, underwearLowerItem);
+  }
 
   const upperQuads = decodeUint16(UPPER_SUIT_QUADS_B64);
   const lowerQuads = decodeUint16(LOWER_SUIT_QUADS_B64);
@@ -1714,6 +1821,8 @@ export function generateRealisticFemaleScene(
     bodyParts,
     clothingUpperItem,
     clothingLowerItem,
+    underwearUpperItem,
+    underwearLowerItem,
     footwearItem,
     accessoriesItem,
     allItems,
