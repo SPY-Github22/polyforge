@@ -158,6 +158,11 @@ The creative capabilities of an LLM in PolyForge are **unbounded** because the a
 Every advanced model in PolyForge—from the ISO 4210 road bicycle to the botanical oak tree, human anatomy, and animated pedaling cyclist—is built upon this exact principle:
 - When we implemented **analytical 2-bone Inverse Kinematics (`solveLegIK`)**, the engine and all connected LLMs gained the native ability to articulately pose and animate pedaling limbs in 1:1 sync with a crankset.
 - When we engineered **spline-based limb lofting and phototropic branching**, LLMs gained the ability to generate procedural forests and botanical biomes.
+- When we engineered the **16 Modular Body Parts Architecture** (`Head & Cranium`, `Neck`, `Chest & Torso`, `Pelvis & Hips`, Left/Right `Upper Arm`, `Forearm`, `Hand`, `Thigh`, `Shin`, `Bare Foot`), LLMs gained the atomic ability to:
+  - **Independently Scale Any Anatomical Part**: Enlarge or shrink shoulders, torso, arms, hips, or legs programmatically via `polyforge.updateObject(id, { scale: [sx, sy, sz] })`.
+  - **Dynamic Clothing Opacity & Material Control**: Adjust garment translucency on the fly via `polyforge.updateObject(id, { material: { transparent: true, opacity: 0.5 } })` or change colors/textures.
+  - **Clean Outer Garment Separation**: Outer garments (tops, jeans, shoes) sit as discrete layers with positive normal clearance offsets (+5mm) over the skin, completely eliminating Z-fighting.
+  - **True Organic Human Anatomy**: Hiding clothing reveals pure procedural parametric organic anatomy (pectorals/breasts, clavicles, cleavage/sternum furrow, ribcage, navel, pelvic floor, buttocks, quadriceps, calves, and bare feet grounded flat at $y = 0.000\text{m}$) without painted suit lapels or shoe soles.
 - **As we continue adding more actions to PolyForge, the expressive vocabulary of every connected LLM expands exponentially.** An LLM can parameterize dimensions, customize materials, hide or strip individual components, swap drop handlebars for bullhorn bars, pose characters, and combine actions in ways the engine creators never anticipated.
 
 ---

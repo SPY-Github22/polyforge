@@ -560,7 +560,9 @@ export const App: React.FC = () => {
         // Detect standalone character stats/metadata JSON (e.g. PolyForge-Realistic-Female.json)
         if (rawJson && typeof rawJson === 'object' && !Array.isArray(rawJson.items) && rawJson.bodyVertices) {
           const isFemale = rawJson.height === 1.68 || file.name.toLowerCase().includes('female');
-          const scene = isFemale ? generateRealisticFemaleScene() : generateRealisticHumanScene();
+          const scene = isFemale
+            ? generateRealisticFemaleScene({ modularBodyParts: true })
+            : generateRealisticHumanScene({ modularBodyParts: true });
           items = scene.allItems;
         } else {
           const data = parseProjectFile(text);
@@ -697,24 +699,24 @@ export const App: React.FC = () => {
   };
 
   const handleAddRealisticHuman = () => {
-    const human = generateRealisticHumanScene();
+    const human = generateRealisticHumanScene({ modularBodyParts: true });
     setSceneItems((prev) => {
       const filtered = prev.filter((it) => it.id !== 'default-cube');
       return [...filtered, ...human.allItems];
     });
-    setSelectedId(human.bodyItem.id);
+    setSelectedId(human.allItems[0].id);
     if (engineRef.current) {
       engineRef.current.focusObject(null);
     }
   };
 
   const handleAddRealisticFemale = () => {
-    const female = generateRealisticFemaleScene();
+    const female = generateRealisticFemaleScene({ modularBodyParts: true });
     setSceneItems((prev) => {
       const filtered = prev.filter((it) => it.id !== 'default-cube');
       return [...filtered, ...female.allItems];
     });
-    setSelectedId(female.bodyItem.id);
+    setSelectedId(female.allItems[0].id);
     if (engineRef.current) {
       engineRef.current.focusObject(null);
     }

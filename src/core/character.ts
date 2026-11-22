@@ -2,6 +2,17 @@ import * as THREE from 'three';
 import { MaterialProperties, SceneItem } from '../types';
 import { applySubdivisionRefinement } from './geometry';
 import {
+  generateOrganicTorso,
+  generateOrganicPelvis,
+  generateOrganicArm,
+  generateOrganicLeg,
+  generateOrganicFoot,
+  generateOrganicNeck,
+  createSceneItemFromBuffer,
+  extractSubmeshBuffer,
+  mergeMeshBuffers,
+} from './anatomy';
+import {
   CHARACTER_VERTS_B64,
   MALE_GENERIC_QUADS_B64,
   HAIR_QUADS_B64,
@@ -19,6 +30,7 @@ export interface RealisticHumanOptions {
   includeClothing?: boolean;      // default true
   includeAccessories?: boolean;   // default true
   includeGlasses?: boolean;       // default false (optional eyewear)
+  modularBodyParts?: boolean;     // default false (when true, allItems contains 16 modular body parts)
   shirtColor?: string;            // default '#1e3a8a' (Fitted shirt/jacket)
   pantsColor?: string;            // default '#1e293b' (Denim jeans)
   shoesColor?: string;            // default '#334155' (Oiled boots/sneakers)
@@ -34,6 +46,7 @@ export interface RealisticFemaleOptions {
   includeClothing?: boolean;      // default true
   includeAccessories?: boolean;   // default true
   includeGlasses?: boolean;       // default false (optional eyewear)
+  modularBodyParts?: boolean;     // default false (when true, allItems contains 16 modular body parts)
   topColor?: string;              // default '#e11d48' (Fitted rose/crimson streetwear top)
   shirtColor?: string;            // alias for topColor
   pantsColor?: string;            // default '#1e293b' (High-waisted indigo denim jeans)
@@ -48,6 +61,7 @@ export interface RealisticFemaleOptions {
 
 export interface RealisticHumanResult {
   bodyItem: SceneItem;
+  bodyParts?: SceneItem[];
   clothingUpperItem?: SceneItem;
   clothingLowerItem?: SceneItem;
   footwearItem?: SceneItem;
@@ -108,6 +122,7 @@ export function generateRealisticHumanScene(
     options.includeGlasses !== undefined
       ? options.includeGlasses
       : options.glassesColor !== undefined;
+  const modularBodyParts = options.modularBodyParts ?? false;
   const shouldSubdivide = options.subdivide ?? false;
 
   const skinColor = options.skinColor || '#d4a373';
@@ -140,12 +155,14 @@ export function generateRealisticHumanScene(
     return idx;
   }
 
-  // 2. High-Fidelity Organic Human Body (Face, Head, Hair, Eyes, Hands, Body)
+  // 2. High-Fidelity Human Cranium, Face & Hands Sub-Meshes
   const mgQuads = decodeUint16(MALE_GENERIC_QUADS_B64);
   const numMgQuads = mgQuads.length / 4;
-  const bodyTriangles: number[] = [];
 
-  // Linear quad subdivision on body mesh to achieve smooth organic contours (> 35,000 verts)
+  const headTris: number[] = [];
+  const lhTris: number[] = [];
+  const rhTris: number[] = [];
+
   for (let q = 0; q < numMgQuads; q++) {
     const v0 = mgQuads[q * 4];
     const v1 = mgQuads[q * 4 + 1];
@@ -164,59 +181,28 @@ export function generateRealisticHumanScene(
       (allPos[v0 * 3 + 2] + allPos[v1 * 3 + 2] + allPos[v2 * 3 + 2] + allPos[v3 * 3 + 2]) * 0.25
     );
 
-    // Triangulate the 4 subdivided sub-quads
-    bodyTriangles.push(v0, m01, cIdx, v0, cIdx, m30);
-    bodyTriangles.push(m01, v1, m12, m01, m12, cIdx);
-    bodyTriangles.push(cIdx, m12, v2, cIdx, v2, m23);
-    bodyTriangles.push(m30, cIdx, m23, m30, m23, v3);
-  }
+    const avgY = (baseVerts[v0 * 3 + 1] + baseVerts[v1 * 3 + 1] + baseVerts[v2 * 3 + 1] + baseVerts[v3 * 3 + 1]) * 0.25;
+    const avgX = (baseVerts[v0 * 3] + baseVerts[v1 * 3] + baseVerts[v2 * 3] + baseVerts[v3 * 3]) * 0.25;
 
-  // Complete Anatomical Under-Garment Torso & Full Leg Skin Mesh
-  // Guarantees full organic skin coverage (breasts, abdomen, back, hips, thighs, knees, calves)
-  // so the complete body is seen whenever outer clothing (top, jeans) is hidden.
-  const skinUndergarmentVerts = new Set<number>();
-  const skinLowerQuads = decodeUint16(LOWER_SUIT_QUADS_B64);
-  for (let i = 0; i < skinLowerQuads.length; i += 4) {
-    skinUndergarmentVerts.add(skinLowerQuads[i]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 1]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 2]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 3]);
-    bodyTriangles.push(
-      skinLowerQuads[i], skinLowerQuads[i + 1], skinLowerQuads[i + 2],
-      skinLowerQuads[i], skinLowerQuads[i + 2], skinLowerQuads[i + 3]
-    );
-  }
-
-  const skinUpperQuads = decodeUint16(UPPER_SUIT_QUADS_B64);
-  for (let i = 0; i < skinUpperQuads.length; i += 4) {
-    const v0 = skinUpperQuads[i];
-    const v1 = skinUpperQuads[i + 1];
-    const v2 = skinUpperQuads[i + 2];
-    const v3 = skinUpperQuads[i + 3];
-
-    // Only include torso quads (chest, breasts, abdomen, back)
-    // The organic neck and arms are already present from base geometry, so omit jacket sleeves and suit collar
-    const yAvg = (allPos[v0 * 3 + 1] + allPos[v1 * 3 + 1] + allPos[v2 * 3 + 1] + allPos[v3 * 3 + 1]) * 0.25;
-    const xAvg = Math.abs(allPos[v0 * 3] + allPos[v1 * 3] + allPos[v2 * 3] + allPos[v3 * 3]) * 0.25;
-    if (xAvg > 0.18 || yAvg > 1.34) {
-      continue;
+    let targetTris: number[] | null = null;
+    if (avgY >= 1.40 && Math.abs(avgX) < 0.20) {
+      targetTris = headTris;
+    } else if (avgY < 1.05 && avgX < -0.16) {
+      targetTris = lhTris;
+    } else if (avgY < 1.05 && avgX > 0.16) {
+      targetTris = rhTris;
     }
-
-    skinUndergarmentVerts.add(v0);
-    skinUndergarmentVerts.add(v1);
-    skinUndergarmentVerts.add(v2);
-    skinUndergarmentVerts.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    if (targetTris) {
+      targetTris.push(v0, m01, cIdx, v0, cIdx, m30);
+      targetTris.push(m01, v1, m12, m01, m12, cIdx);
+      targetTris.push(cIdx, m12, v2, cIdx, v2, m23);
+      targetTris.push(m30, cIdx, m23, m30, m23, v3);
+    }
   }
 
-  // Hair, Eyebrows, Eyes, Teeth, and Tongue geometry
-  const hairQuads = decodeUint16(HAIR_QUADS_B64);
-  const eyebrowQuads = decodeUint16(EYEBROW_QUADS_B64);
-  const eyeQuads = decodeUint16(EYE_QUADS_B64);
-  const teethQuads = decodeUint16(TEETH_QUADS_B64);
-  const tongueQuads = decodeUint16(TONGUE_QUADS_B64);
-
+  // Hair, Eyebrows, Eyes, Teeth, and Tongue
   const hairVertIndices = new Set<number>();
+  const hairQuads = decodeUint16(HAIR_QUADS_B64);
   for (let i = 0; i < hairQuads.length; i += 4) {
     const v0 = hairQuads[i];
     const v1 = hairQuads[i + 1];
@@ -226,8 +212,13 @@ export function generateRealisticHumanScene(
     hairVertIndices.add(v1);
     hairVertIndices.add(v2);
     hairVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
+
+  const eyebrowQuads = decodeUint16(EYEBROW_QUADS_B64);
+  const eyeQuads = decodeUint16(EYE_QUADS_B64);
+  const teethQuads = decodeUint16(TEETH_QUADS_B64);
+  const tongueQuads = decodeUint16(TONGUE_QUADS_B64);
 
   const eyebrowVertIndices = new Set<number>();
   for (let i = 0; i < eyebrowQuads.length; i += 4) {
@@ -239,7 +230,7 @@ export function generateRealisticHumanScene(
     eyebrowVertIndices.add(v1);
     eyebrowVertIndices.add(v2);
     eyebrowVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
   const eyeVertIndices = new Set<number>();
@@ -252,7 +243,7 @@ export function generateRealisticHumanScene(
     eyeVertIndices.add(v1);
     eyeVertIndices.add(v2);
     eyeVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
   const teethVertIndices = new Set<number>();
@@ -261,7 +252,7 @@ export function generateRealisticHumanScene(
     teethVertIndices.add(teethQuads[i + 1]);
     teethVertIndices.add(teethQuads[i + 2]);
     teethVertIndices.add(teethQuads[i + 3]);
-    bodyTriangles.push(teethQuads[i], teethQuads[i + 1], teethQuads[i + 2], teethQuads[i], teethQuads[i + 2], teethQuads[i + 3]);
+    headTris.push(teethQuads[i], teethQuads[i + 1], teethQuads[i + 2], teethQuads[i], teethQuads[i + 2], teethQuads[i + 3]);
   }
 
   const tongueVertIndices = new Set<number>();
@@ -270,7 +261,7 @@ export function generateRealisticHumanScene(
     tongueVertIndices.add(tongueQuads[i + 1]);
     tongueVertIndices.add(tongueQuads[i + 2]);
     tongueVertIndices.add(tongueQuads[i + 3]);
-    bodyTriangles.push(tongueQuads[i], tongueQuads[i + 1], tongueQuads[i + 2], tongueQuads[i], tongueQuads[i + 2], tongueQuads[i + 3]);
+    headTris.push(tongueQuads[i], tongueQuads[i + 1], tongueQuads[i + 2], tongueQuads[i], tongueQuads[i + 2], tongueQuads[i + 3]);
   }
 
   // Watkins cranium vault crown cap vertex at y = 1.760, normal pointing +y
@@ -281,7 +272,7 @@ export function generateRealisticHumanScene(
   allPos.push(-0.001, 1.759, -0.015);
   const crownB2 = allPos.length / 3;
   allPos.push(0.001, 1.759, -0.015);
-  bodyTriangles.push(crownApexIdx, crownB1, crownB2);
+  headTris.push(crownApexIdx, crownB1, crownB2);
 
   const chinApexIdx = allPos.length / 3;
   allPos.push(0.000, 1.542, 0.012);
@@ -289,14 +280,9 @@ export function generateRealisticHumanScene(
   allPos.push(0.001, 1.543, 0.013);
   const chinB2 = allPos.length / 3;
   allPos.push(-0.001, 1.543, 0.013);
-  bodyTriangles.push(chinApexIdx, chinB1, chinB2);
+  headTris.push(chinApexIdx, chinB1, chinB2);
 
-  // Remap unique vertices for compact BufferGeometry
-  const bodyUniqueVerts = Array.from(new Set(bodyTriangles));
-  const bodyRemap = new Map<number, number>();
-  const bodyPositions: number[] = [];
-  const bodyColors: number[] = [];
-
+  // Colors for base vertices
   const skinColorObj = new THREE.Color(skinColor);
   const hairColorObj = new THREE.Color(hairColor);
   const browColorObj = new THREE.Color(hairColor).lerp(skinColorObj, 0.15);
@@ -306,41 +292,29 @@ export function generateRealisticHumanScene(
   const tongueColorObj = new THREE.Color('#cf606e');
   const lipColorObj = new THREE.Color(skinColor).lerp(new THREE.Color('#be5462'), 0.38);
 
-  for (let i = 0; i < bodyUniqueVerts.length; i++) {
-    const oldIdx = bodyUniqueVerts[i];
-    bodyRemap.set(oldIdx, i);
-    let px = allPos[oldIdx * 3];
-    let py = allPos[oldIdx * 3 + 1];
-    let pz = allPos[oldIdx * 3 + 2];
+  const allCols: number[] = [];
+  for (let i = 0; i < allPos.length / 3; i++) {
+    const px = allPos[i * 3];
+    const py = allPos[i * 3 + 1];
+    const pz = allPos[i * 3 + 2];
 
-    if (skinUndergarmentVerts.has(oldIdx)) {
-      const rad = Math.hypot(px, pz);
-      if (rad > 0.04) {
-        const comp = 1.0 - 0.0020 / rad;
-        px *= comp;
-        pz *= comp;
-      }
-    }
-
-    bodyPositions.push(px, py, pz);
-
-    if (hairVertIndices.has(oldIdx)) {
-      bodyColors.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
-    } else if (eyebrowVertIndices.has(oldIdx)) {
-      bodyColors.push(browColorObj.r, browColorObj.g, browColorObj.b);
-    } else if (eyeVertIndices.has(oldIdx)) {
+    if (hairVertIndices.has(i)) {
+      allCols.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
+    } else if (eyebrowVertIndices.has(i)) {
+      allCols.push(browColorObj.r, browColorObj.g, browColorObj.b);
+    } else if (eyeVertIndices.has(i)) {
       const eyeDist = Math.hypot(Math.abs(px) - 0.0285, py - 1.653);
       if (eyeDist < 0.0030 && pz > 0.050) {
-        bodyColors.push(0.04, 0.04, 0.05);
+        allCols.push(0.04, 0.04, 0.05);
       } else if (eyeDist < 0.0070 && pz > 0.050) {
-        bodyColors.push(irisColorObj.r, irisColorObj.g, irisColorObj.b);
+        allCols.push(irisColorObj.r, irisColorObj.g, irisColorObj.b);
       } else {
-        bodyColors.push(scleraColorObj.r, scleraColorObj.g, scleraColorObj.b);
+        allCols.push(scleraColorObj.r, scleraColorObj.g, scleraColorObj.b);
       }
-    } else if (teethVertIndices.has(oldIdx)) {
-      bodyColors.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
-    } else if (tongueVertIndices.has(oldIdx)) {
-      bodyColors.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
+    } else if (teethVertIndices.has(i)) {
+      allCols.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
+    } else if (tongueVertIndices.has(i)) {
+      allCols.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
     } else {
       const lipX = Math.abs(px) / 0.019;
       const lipY = Math.abs(py - 1.583) / 0.010;
@@ -348,31 +322,95 @@ export function generateRealisticHumanScene(
       if (lipDistSq < 1.0 && pz > 0.050) {
         const lipAlpha = Math.max(0, 1.0 - lipDistSq);
         const blendedLip = skinColorObj.clone().lerp(lipColorObj, 0.22 + 0.48 * lipAlpha);
-        bodyColors.push(blendedLip.r, blendedLip.g, blendedLip.b);
+        allCols.push(blendedLip.r, blendedLip.g, blendedLip.b);
       } else {
-        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+        allCols.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
       }
     }
   }
 
-  const bodyIndices: number[] = bodyTriangles.map((oldIdx) => bodyRemap.get(oldIdx)!);
+  // Extract head and hands submeshes
+  const headBuf = extractSubmeshBuffer(headTris, allPos, allCols);
+  const lhBuf = extractSubmeshBuffer(lhTris, allPos, allCols);
+  const rhBuf = extractSubmeshBuffer(rhTris, allPos, allCols);
+
+  // Generate organic anatomy sub-assemblies (male proportions, scale = 1.0)
+  const neckBuf = generateOrganicNeck('male', 1.0);
+  const torsoBuf = generateOrganicTorso('male', 1.0);
+  const pelvisBuf = generateOrganicPelvis('male', 1.0);
+  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', 1.0);
+  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', 1.0);
+  const lForearmBuf = generateOrganicArm('forearm', 'left', 1.0);
+  const rForearmBuf = generateOrganicArm('forearm', 'right', 1.0);
+  const lThighBuf = generateOrganicLeg('thigh', 'left', 1.0);
+  const rThighBuf = generateOrganicLeg('thigh', 'right', 1.0);
+  const lShinBuf = generateOrganicLeg('shin', 'left', 1.0);
+  const rShinBuf = generateOrganicLeg('shin', 'right', 1.0);
+  const lFootBuf = generateOrganicFoot('left', 1.0);
+  const rFootBuf = generateOrganicFoot('right', 1.0);
+
+  const skinMaterial: MaterialProperties = {
+    color: skinColor,
+    roughness: 0.65,
+    metalness: 0.02,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    transmission: 0,
+    opacity: 1,
+    transparent: false,
+    wireframe: false,
+    texturePreset: 'skin_tone',
+    vertexColors: true,
+  };
+
+  // Build the 16 Modular Body Part SceneItems
+  const bodyParts: SceneItem[] = [
+    createSceneItemFromBuffer('human-head', 'Head & Cranium', headBuf, skinMaterial),
+    createSceneItemFromBuffer('human-neck', 'Neck', neckBuf, skinMaterial),
+    createSceneItemFromBuffer('human-torso', 'Chest & Torso', torsoBuf, skinMaterial),
+    createSceneItemFromBuffer('human-pelvis', 'Pelvis & Hips', pelvisBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-upperarm', 'Left Upper Arm', lUpperArmBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-forearm', 'Left Forearm', lForearmBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-hand', 'Left Hand', lhBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-upperarm', 'Right Upper Arm', rUpperArmBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-forearm', 'Right Forearm', rForearmBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-hand', 'Right Hand', rhBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-thigh', 'Left Thigh', lThighBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-shin', 'Left Shin', lShinBuf, skinMaterial),
+    createSceneItemFromBuffer('human-left-foot', 'Left Bare Foot', lFootBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-thigh', 'Right Thigh', rThighBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-shin', 'Right Shin', rShinBuf, skinMaterial),
+    createSceneItemFromBuffer('human-right-foot', 'Right Bare Foot', rFootBuf, skinMaterial),
+  ];
+
+  // Merge all 16 sub-assemblies into a single high-fidelity organic body mesh
+  const mergedBodyBuffer = mergeMeshBuffers([
+    headBuf, neckBuf, torsoBuf, pelvisBuf,
+    lUpperArmBuf, lForearmBuf, lhBuf,
+    rUpperArmBuf, rForearmBuf, rhBuf,
+    lThighBuf, lShinBuf, lFootBuf,
+    rThighBuf, rShinBuf, rFootBuf,
+  ]);
 
   let bodyGeo = new THREE.BufferGeometry();
-  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(bodyPositions, 3));
-  bodyGeo.setAttribute('color', new THREE.Float32BufferAttribute(bodyColors, 3));
-  bodyGeo.setIndex(bodyIndices);
-  bodyGeo.computeVertexNormals();
+  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(mergedBodyBuffer.positions, 3));
+  bodyGeo.setAttribute('normal', new THREE.Float32BufferAttribute(mergedBodyBuffer.normals, 3));
+  if (mergedBodyBuffer.colors) {
+    bodyGeo.setAttribute('color', new THREE.Float32BufferAttribute(mergedBodyBuffer.colors, 3));
+  }
+  bodyGeo.setIndex(mergedBodyBuffer.indices);
 
   if (shouldSubdivide) {
     bodyGeo = applySubdivisionRefinement(bodyGeo, 1);
   }
 
+  // Ensure unit length, outward-pointing chest normals
   const normAttr = bodyGeo.getAttribute('normal') as THREE.BufferAttribute;
   const pAttr = bodyGeo.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < normAttr.count; i++) {
     const py = pAttr.getY(i);
     const pz = pAttr.getZ(i);
-    if (py >= 0.95 && py <= 1.40 && pz > 0.03) {
+    if (py >= 1.00 && py <= 1.50 && pz > 0.04) {
       if (normAttr.getZ(i) <= 0) {
         normAttr.setZ(i, 0.05);
       }
@@ -383,7 +421,7 @@ export function generateRealisticHumanScene(
   const finalBodyNormals = Array.from(normAttr.array as Float32Array);
   const finalBodyColors = bodyGeo.getAttribute('color')
     ? Array.from(bodyGeo.getAttribute('color').array as Float32Array)
-    : bodyColors;
+    : mergedBodyBuffer.colors!;
   const finalBodyIndices = Array.from(bodyGeo.index!.array as Uint16Array | Uint32Array);
   const finalBodyUvs = new Array((finalBodyPositions.length / 3) * 2).fill(0);
 
@@ -406,24 +444,14 @@ export function generateRealisticHumanScene(
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
     },
-    material: {
-      color: skinColor,
-      roughness: 0.65,
-      metalness: 0.02,
-      emissive: '#000000',
-      emissiveIntensity: 0,
-      transmission: 0,
-      opacity: 1,
-      transparent: false,
-      wireframe: false,
-      texturePreset: 'skin_tone',
-      vertexColors: true,
-    },
+    material: skinMaterial,
     visible: true,
     locked: false,
   };
 
-  const allItems: SceneItem[] = [bodyItem];
+  const allItems: SceneItem[] = modularBodyParts
+    ? [...bodyParts]
+    : [bodyItem];
 
   // Helper to build clothing & footwear SceneItems from quads
   function buildItemFromQuads(
@@ -461,11 +489,11 @@ export function generateRealisticHumanScene(
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
-    // Conformal normal extrusion ensuring 100% clean drapery over skin
+    // Conformal normal extrusion ensuring clean drapery over skin
     if (id === 'human-shirt' || id === 'human-pants') {
       const pAttr = geo.getAttribute('position') as THREE.BufferAttribute;
       const nAttr = geo.getAttribute('normal') as THREE.BufferAttribute;
-      const offset = id === 'human-shirt' ? 0.0006 : 0.0018;
+      const offset = id === 'human-shirt' ? 0.0008 : 0.0015;
       for (let i = 0; i < pAttr.count; i++) {
         pAttr.setXYZ(
           i,
@@ -473,6 +501,20 @@ export function generateRealisticHumanScene(
           pAttr.getY(i) + nAttr.getY(i) * offset,
           pAttr.getZ(i) + nAttr.getZ(i) * offset
         );
+      }
+      geo.computeVertexNormals();
+    }
+
+    if (id === 'human-shoes') {
+      const pAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+      let minY = Infinity;
+      for (let i = 0; i < pAttr.count; i++) {
+        if (pAttr.getY(i) < minY) minY = pAttr.getY(i);
+      }
+      if (minY !== 0 && Math.abs(minY) > 1e-4) {
+        for (let i = 0; i < pAttr.count; i++) {
+          pAttr.setY(i, pAttr.getY(i) - minY);
+        }
       }
       geo.computeVertexNormals();
     }
@@ -677,6 +719,7 @@ export function generateRealisticHumanScene(
 
   return {
     bodyItem,
+    bodyParts,
     clothingUpperItem,
     clothingLowerItem,
     footwearItem,
@@ -717,6 +760,7 @@ export function generateRealisticFemaleScene(
     options.includeGlasses !== undefined
       ? options.includeGlasses
       : options.glassesColor !== undefined;
+  const modularBodyParts = options.modularBodyParts ?? false;
   const shouldSubdivide = options.subdivide ?? false;
 
   const skinColor = options.skinColor || '#e0ac82';
@@ -887,14 +931,14 @@ export function generateRealisticFemaleScene(
       }
     }
 
-    // 7. Feminine Contoured Layered Hair with Youthful Framing Bangs (Anchored 100% to skull)
+    // 7. Feminine Cranial-Anchored Hair with Framing Bangs & Temple Locks (Snug cranial fit)
     if (i >= 7990 && i <= 10973) {
-      // Natural cranial volumetric body (subtle 2.5mm radial expansion from cranium center at z = -0.046)
+      // Cranial volumetric body (subtle 2.8mm radial expansion from cranium center at z = -0.040)
       const headCenterY = 1.58;
-      const headCenterZ = -0.046;
+      const headCenterZ = -0.040;
       const radHead = Math.hypot(x, y - headCenterY, z - headCenterZ);
-      if (radHead > 0.04) {
-        const exp = 1.0 + 0.0025 / radHead;
+      if (radHead > 0.035) {
+        const exp = 1.0 + 0.0028 / radHead;
         x *= exp;
         z = headCenterZ + (z - headCenterZ) * exp;
       }
@@ -908,17 +952,17 @@ export function generateRealisticFemaleScene(
         }
       }
 
-      // Frontal hairline and youthful bangs: bring front hair down to frame forehead gracefully
-      if (z > 0.015 && y >= 1.58 && y <= 1.66) {
-        const frontT = Math.min(1.0, (1.66 - y) / 0.08);
-        y -= frontT * 0.022; // Bring frontal hair down ~2.2cm to y ~ 1.585
-        z += frontT * 0.012; // Drape forward over forehead dome
+      // Frontal hairline and youthful framing bangs: rests directly on forehead dome above eyebrows
+      if (z > 0.015 && y >= 1.55 && y <= 1.66) {
+        const frontT = Math.min(1.0, (1.66 - y) / 0.09);
+        y -= frontT * 0.018; // Drapes down toward brows
+        z += frontT * 0.010; // Rests in front of forehead skin
       }
 
       // Temple locks: drape smoothly along sides of face in front of ears
-      if (absX >= 0.055 && y >= 1.52 && y <= 1.64 && z > -0.010) {
+      if (absX >= 0.055 && y >= 1.50 && y <= 1.64 && z > -0.010) {
         const sideT = Math.min(1.0, (1.64 - y) / 0.12);
-        x += side * sideT * 0.004;
+        x += side * sideT * 0.005;
         z += sideT * 0.008;
       }
     }
@@ -1003,10 +1047,13 @@ export function generateRealisticFemaleScene(
     return idx;
   }
 
-  // 2. High-Fidelity Female Body Mesh (Subdivided for smooth organic skin)
+  // 2. High-Fidelity Female Cranium, Face & Hands Sub-Meshes
   const mgQuads = decodeUint16(MALE_GENERIC_QUADS_B64);
   const numMgQuads = mgQuads.length / 4;
-  const bodyTriangles: number[] = [];
+
+  const headTris: number[] = [];
+  const lhTris: number[] = [];
+  const rhTris: number[] = [];
 
   for (let q = 0; q < numMgQuads; q++) {
     const v0 = mgQuads[q * 4];
@@ -1026,59 +1073,27 @@ export function generateRealisticFemaleScene(
       (allPos[v0 * 3 + 2] + allPos[v1 * 3 + 2] + allPos[v2 * 3 + 2] + allPos[v3 * 3 + 2]) * 0.25
     );
 
-    bodyTriangles.push(v0, m01, cIdx, v0, cIdx, m30);
-    bodyTriangles.push(m01, v1, m12, m01, m12, cIdx);
-    bodyTriangles.push(cIdx, m12, v2, cIdx, v2, m23);
-    bodyTriangles.push(m30, cIdx, m23, m30, m23, v3);
+    const avgY = (baseVerts[v0 * 3 + 1] + baseVerts[v1 * 3 + 1] + baseVerts[v2 * 3 + 1] + baseVerts[v3 * 3 + 1]) * 0.25;
+    const avgX = (baseVerts[v0 * 3] + baseVerts[v1 * 3] + baseVerts[v2 * 3] + baseVerts[v3 * 3]) * 0.25;
+
+    let targetTris: number[] | null = null;
+    if (avgY >= 1.34 && Math.abs(avgX) < 0.20) {
+      targetTris = headTris;
+    } else if (avgY < 1.05 && avgX < -0.15) {
+      targetTris = lhTris;
+    } else if (avgY < 1.05 && avgX > 0.15) {
+      targetTris = rhTris;
+    }
+    if (targetTris) {
+      targetTris.push(v0, m01, cIdx, v0, cIdx, m30);
+      targetTris.push(m01, v1, m12, m01, m12, cIdx);
+      targetTris.push(cIdx, m12, v2, cIdx, v2, m23);
+      targetTris.push(m30, cIdx, m23, m30, m23, v3);
+    }
   }
 
-  // Complete Anatomical Under-Garment Torso, Arms, Legs & Feet Skin Mesh
-  // Guarantees full organic skin coverage (breasts, abdomen, back, shoulders, arms, hips, thighs, knees, calves, feet)
-  // so the complete body is seen whenever outer clothing (top, jeans, sneakers) is hidden.
-  const skinUndergarmentVerts = new Set<number>();
-  const skinLowerQuads = decodeUint16(LOWER_SUIT_QUADS_B64);
-  for (let i = 0; i < skinLowerQuads.length; i += 4) {
-    skinUndergarmentVerts.add(skinLowerQuads[i]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 1]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 2]);
-    skinUndergarmentVerts.add(skinLowerQuads[i + 3]);
-    bodyTriangles.push(
-      skinLowerQuads[i], skinLowerQuads[i + 1], skinLowerQuads[i + 2],
-      skinLowerQuads[i], skinLowerQuads[i + 2], skinLowerQuads[i + 3]
-    );
-  }
-
-  const skinUpperQuads = decodeUint16(UPPER_SUIT_QUADS_B64);
-  for (let i = 0; i < skinUpperQuads.length; i += 4) {
-    const v0 = skinUpperQuads[i];
-    const v1 = skinUpperQuads[i + 1];
-    const v2 = skinUpperQuads[i + 2];
-    const v3 = skinUpperQuads[i + 3];
-
-    skinUndergarmentVerts.add(v0);
-    skinUndergarmentVerts.add(v1);
-    skinUndergarmentVerts.add(v2);
-    skinUndergarmentVerts.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
-  }
-
-  const skinFootQuads = decodeUint16(SHOES_QUADS_B64);
-  for (let i = 0; i < skinFootQuads.length; i += 4) {
-    skinUndergarmentVerts.add(skinFootQuads[i]);
-    skinUndergarmentVerts.add(skinFootQuads[i + 1]);
-    skinUndergarmentVerts.add(skinFootQuads[i + 2]);
-    skinUndergarmentVerts.add(skinFootQuads[i + 3]);
-    bodyTriangles.push(
-      skinFootQuads[i], skinFootQuads[i + 1], skinFootQuads[i + 2],
-      skinFootQuads[i], skinFootQuads[i + 2], skinFootQuads[i + 3]
-    );
-  }
-
-  // Hair, Eyebrows, Eyes, Teeth, and Tongue geometry
-  // For female character: generate an ultra-realistic, volumetric feminine layered hairstyle & athletic ponytail
+  // Hair cranial anchoring & flowing ponytail
   const hairVertIndices = new Set<number>();
-
-  // 1. Skull-Conformal Hair Hairstyle from HAIR_QUADS_B64 (1,839 quads perfectly anchored to the cranium)
   const hairQuads = decodeUint16(HAIR_QUADS_B64);
   for (let i = 0; i < hairQuads.length; i += 4) {
     const v0 = hairQuads[i];
@@ -1089,23 +1104,20 @@ export function generateRealisticFemaleScene(
     hairVertIndices.add(v1);
     hairVertIndices.add(v2);
     hairVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
-  // 2. Athletic Sleek Ponytail / Cascade flowing down the back
+  // Athletic Sleek Ponytail flowing down the back anchored to occiput
   const ponyStartIdx = allPos.length / 3;
   const ponyRings = 14;
   const ponySegs = 16;
-  const ponyRoot = new THREE.Vector3(0, 1.558, -0.092);
-  const ponyTip = new THREE.Vector3(0, 1.360, -0.110);
+  const ponyRoot = new THREE.Vector3(0, 1.550, -0.096);
+  const ponyTip = new THREE.Vector3(0, 1.350, -0.118);
 
   for (let r = 0; r <= ponyRings; r++) {
     const t = r / ponyRings;
     const curCenter = new THREE.Vector3().lerpVectors(ponyRoot, ponyTip, t);
-    // Natural subtle S-curve flow
     curCenter.z += Math.sin(t * Math.PI) * -0.018;
-
-    // Taper radius from 0.022m at root down to 0.008m at tip
     const curRad = 0.022 * (1.0 - t * 0.65);
 
     for (let s = 0; s < ponySegs; s++) {
@@ -1127,13 +1139,11 @@ export function generateRealisticFemaleScene(
       const i1 = ponyStartIdx + r * ponySegs + nextS;
       const i2 = ponyStartIdx + (r + 1) * ponySegs + nextS;
       const i3 = ponyStartIdx + (r + 1) * ponySegs + s;
-      bodyTriangles.push(i0, i1, i2, i0, i2, i3);
+      headTris.push(i0, i1, i2, i0, i2, i3);
     }
   }
 
-
-
-  // 3. Eyebrows, Eyes, Teeth, and Tongue geometry
+  // Eyebrows, Eyes, Teeth, and Tongue
   const eyebrowQuads = decodeUint16(EYEBROW_QUADS_B64);
   const eyeQuads = decodeUint16(EYE_QUADS_B64);
   const teethQuads = decodeUint16(TEETH_QUADS_B64);
@@ -1149,7 +1159,7 @@ export function generateRealisticFemaleScene(
     eyebrowVertIndices.add(v1);
     eyebrowVertIndices.add(v2);
     eyebrowVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
   const eyeVertIndices = new Set<number>();
@@ -1162,7 +1172,7 @@ export function generateRealisticFemaleScene(
     eyeVertIndices.add(v1);
     eyeVertIndices.add(v2);
     eyeVertIndices.add(v3);
-    bodyTriangles.push(v0, v1, v2, v0, v2, v3);
+    headTris.push(v0, v1, v2, v0, v2, v3);
   }
 
   const teethVertIndices = new Set<number>();
@@ -1171,7 +1181,7 @@ export function generateRealisticFemaleScene(
     teethVertIndices.add(teethQuads[i + 1]);
     teethVertIndices.add(teethQuads[i + 2]);
     teethVertIndices.add(teethQuads[i + 3]);
-    bodyTriangles.push(teethQuads[i], teethQuads[i + 1], teethQuads[i + 2], teethQuads[i], teethQuads[i + 2], teethQuads[i + 3]);
+    headTris.push(teethQuads[i], teethQuads[i + 1], teethQuads[i + 2], teethQuads[i], teethQuads[i + 2], teethQuads[i + 3]);
   }
 
   const tongueVertIndices = new Set<number>();
@@ -1180,18 +1190,31 @@ export function generateRealisticFemaleScene(
     tongueVertIndices.add(tongueQuads[i + 1]);
     tongueVertIndices.add(tongueQuads[i + 2]);
     tongueVertIndices.add(tongueQuads[i + 3]);
-    bodyTriangles.push(tongueQuads[i], tongueQuads[i + 1], tongueQuads[i + 2], tongueQuads[i], tongueQuads[i + 2], tongueQuads[i + 3]);
+    headTris.push(tongueQuads[i], tongueQuads[i + 1], tongueQuads[i + 2], tongueQuads[i], tongueQuads[i + 2], tongueQuads[i + 3]);
   }
 
-  // Remap unique vertices for compact BufferGeometry
-  const bodyUniqueVerts = Array.from(new Set(bodyTriangles));
-  const bodyRemap = new Map<number, number>();
-  const bodyPositions: number[] = [];
-  const bodyColors: number[] = [];
+  // Watkins cranium vault crown cap vertex at y = 1.660m, normal pointing +y
+  // Chin apex cap vertex at y = 1.455m, normal pointing -y
+  const crownApexIdx = allPos.length / 3;
+  allPos.push(0.000, 1.660, -0.013);
+  const crownB1 = allPos.length / 3;
+  allPos.push(-0.001, 1.659, -0.014);
+  const crownB2 = allPos.length / 3;
+  allPos.push(0.001, 1.659, -0.014);
+  headTris.push(crownApexIdx, crownB1, crownB2);
 
+  const chinApexIdx = allPos.length / 3;
+  allPos.push(0.000, 1.455, 0.011);
+  const chinB1 = allPos.length / 3;
+  allPos.push(0.001, 1.456, 0.012);
+  const chinB2 = allPos.length / 3;
+  allPos.push(-0.001, 1.456, 0.012);
+  headTris.push(chinApexIdx, chinB1, chinB2);
+
+  // Compute Colors for all base & subdivided vertices
   const skinColorObj = new THREE.Color(skinColor);
   const hairColorObj = new THREE.Color(hairColor);
-  const browColorObj = new THREE.Color('#3e2720'); // Natural soft brunette/chestnut eyebrow
+  const browColorObj = new THREE.Color('#3e2720');
   const scleraColorObj = new THREE.Color('#f0edf2');
   const scleraCornerColorObj = new THREE.Color('#e8c6c3');
   const irisCoreColorObj = new THREE.Color('#382014');
@@ -1201,152 +1224,167 @@ export function generateRealisticFemaleScene(
   const blushColorObj = new THREE.Color('#d98075');
   const teethColorObj = new THREE.Color('#fcfcfd');
   const tongueColorObj = new THREE.Color('#cf606e');
-  const lipColorObj = new THREE.Color('#b8384e'); // Rich natural rose-red vermilion
+  const lipColorObj = new THREE.Color('#c25466');
 
-  for (let i = 0; i < bodyUniqueVerts.length; i++) {
-    const oldIdx = bodyUniqueVerts[i];
-    bodyRemap.set(oldIdx, i);
-    let px = allPos[oldIdx * 3];
-    let py = allPos[oldIdx * 3 + 1];
-    let pz = allPos[oldIdx * 3 + 2];
+  const allCols: number[] = [];
+  for (let i = 0; i < allPos.length / 3; i++) {
+    const px = allPos[i * 3];
+    const py = allPos[i * 3 + 1];
+    const pz = allPos[i * 3 + 2];
 
-    if (skinUndergarmentVerts.has(oldIdx)) {
-      // 1. Bridge waist junction to seal any seam gap between torso and pelvis
-      if (py >= 0.96 && py <= 1.03) {
-        const waistDrop = (1.03 - py) / 0.07;
-        py -= waistDrop * 0.016;
-      }
-
-      // 2. Slim jacket bulk into sleek organic female arms (shoulders -> biceps -> wrists)
-      const absPx = Math.abs(px);
-      if (absPx > 0.16 && py >= 0.85 && py <= 1.32) {
-        const armCx = Math.sign(px) * 0.25;
-        px = armCx + (px - armCx) * 0.88;
-        pz *= 0.88;
-      }
-
-      // 3. Flatten suit lapel folds on upper chest/clavicles into smooth female skin
-      if (py >= 1.28 && py <= 1.38 && absPx < 0.16 && pz > 0.040) {
-        pz = 0.040 + (pz - 0.040) * 0.50;
-      }
-
-      // 4. Taper loose pant hems into slender athletic ankles (y in [0.08, 0.22])
-      if (py >= 0.08 && py <= 0.22) {
-        const ankleT = (0.22 - py) / 0.14;
-        const legCx = Math.sign(px) * 0.09;
-        px = legCx + (px - legCx) * (1.0 - ankleT * 0.18);
-        pz *= (1.0 - ankleT * 0.14);
-      }
-
-      const rad = Math.hypot(px, pz);
-      if (rad > 0.04) {
-        const comp = 1.0 - 0.0020 / rad;
-        px *= comp;
-        pz *= comp;
-      }
-    }
-
-    bodyPositions.push(px, py, pz);
-
-    if (hairVertIndices.has(oldIdx)) {
-      bodyColors.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
-    } else if (eyebrowVertIndices.has(oldIdx)) {
-      // Natural feminine eyebrow: rich soft brunette tone with delicate lateral feathering
+    if (hairVertIndices.has(i)) {
+      allCols.push(hairColorObj.r, hairColorObj.g, hairColorObj.b);
+    } else if (eyebrowVertIndices.has(i)) {
       const absX = Math.abs(px);
       const browT = Math.max(0, Math.min(1, (absX - 0.018) / (0.054 - 0.018)));
       const featherAlpha = Math.sin(browT * Math.PI);
       const curBrow = skinColorObj.clone().lerp(browColorObj, 0.75 + 0.22 * featherAlpha);
-      bodyColors.push(curBrow.r, curBrow.g, curBrow.b);
-    } else if (eyeVertIndices.has(oldIdx)) {
-      // High-Fidelity Anatomical Eye Shading: pupil, specular catchlight, iris, limbal ring, sclera, and eyelid cast shadow
+      allCols.push(curBrow.r, curBrow.g, curBrow.b);
+    } else if (eyeVertIndices.has(i)) {
       const eyeCenterX = Math.abs(px) - 0.0281;
       const eyeCenterY = py - 1.5595;
       const eyeDist = Math.hypot(eyeCenterX, eyeCenterY);
 
-      // Natural upper eyelid drape & eyeliner: alert, clear, open feminine gaze
       if (py >= 1.5670 && pz > 0.044) {
-        // Upper eyelid skin fold covering top of eyeball
-        bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+        allCols.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
       } else if (py >= 1.5655 && py < 1.5670 && pz > 0.044) {
-        // Upper eyeliner / dense lash line (defines beautiful feminine eyes)
-        bodyColors.push(0.12, 0.07, 0.06);
+        allCols.push(0.12, 0.07, 0.06);
       } else {
-        // Specular lively catchlight highlight on front-upper pupil margin
         const specDist = Math.hypot(Math.abs(px) - 0.0268, py - 1.5616);
         if (specDist < 0.0016 && pz > 0.050) {
-          bodyColors.push(1.0, 1.0, 1.0); // Radiant lively catchlight
+          allCols.push(1.0, 1.0, 1.0);
         } else if (eyeDist < 0.0036 && pz > 0.046) {
-          bodyColors.push(pupilColorObj.r, pupilColorObj.g, pupilColorObj.b); // Deep obsidian pupil
+          allCols.push(pupilColorObj.r, pupilColorObj.g, pupilColorObj.b);
         } else if (eyeDist < 0.0090 && pz > 0.043) {
-          // Warm glowing multi-tone iris gradient
           const irisT = Math.max(0, Math.min(1, (eyeDist - 0.0036) / (0.0090 - 0.0036)));
           const curIris = irisCoreColorObj.clone().lerp(irisOuterColorObj, irisT);
-          bodyColors.push(curIris.r, curIris.g, curIris.b);
+          allCols.push(curIris.r, curIris.g, curIris.b);
         } else if (eyeDist < 0.0102 && pz > 0.041) {
-          // Soft dark limbal ring (adds youthful depth and definition)
-          bodyColors.push(limbalRingColorObj.r, limbalRingColorObj.g, limbalRingColorObj.b);
+          allCols.push(limbalRingColorObj.r, limbalRingColorObj.g, limbalRingColorObj.b);
         } else {
-          // Natural sclera with soft corner warmth & eyelash cast shadow
           const cornerFactor = Math.min(1.0, Math.abs(eyeCenterX) / 0.015);
           let curSclera = scleraColorObj.clone().lerp(scleraCornerColorObj, cornerFactor * 0.45);
           if (py > 1.5585) {
             const shadowT = Math.min(1.0, (py - 1.5585) / 0.0045);
             curSclera = curSclera.lerp(new THREE.Color('#4a3c38'), shadowT * 0.65);
           }
-          bodyColors.push(curSclera.r, curSclera.g, curSclera.b);
+          allCols.push(curSclera.r, curSclera.g, curSclera.b);
         }
       }
-    } else if (teethVertIndices.has(oldIdx)) {
-      bodyColors.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
-    } else if (tongueVertIndices.has(oldIdx)) {
-      bodyColors.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
+    } else if (teethVertIndices.has(i)) {
+      allCols.push(teethColorObj.r, teethColorObj.g, teethColorObj.b);
+    } else if (tongueVertIndices.has(i)) {
+      allCols.push(tongueColorObj.r, tongueColorObj.g, tongueColorObj.b);
     } else {
-      // Facial skin shading: soft cheek blush, sculpted lips, and scalp protection
       const absPx = Math.abs(px);
-
-      // Scalp shading deep under hair vault (strictly excludes face, forehead, temples, and cheeks)
-      if ((py >= 1.64 && pz < 0.038) || (py >= 1.60 && pz < -0.015) || (py >= 1.55 && pz < -0.040)) {
-        bodyColors.push(hairColorObj.r * 0.7, hairColorObj.g * 0.7, hairColorObj.b * 0.7);
-      }
-      // Sculpted vermilion lips with soft gradient
-      else {
-        const lipX = absPx / 0.0275;
-        const lipY = Math.abs(py - 1.491) / 0.0125;
+      const isScalp =
+        py >= 1.635 ||
+        (py >= 1.618 && pz < 0.035) ||
+        (py >= 1.565 && pz < -0.010) ||
+        (py >= 1.515 && pz < -0.035);
+      if (isScalp) {
+        allCols.push(hairColorObj.r * 0.75, hairColorObj.g * 0.75, hairColorObj.b * 0.75);
+      } else {
+        const lipX = absPx / 0.0195;
+        const lipY = Math.abs(py - 1.493) / 0.0095;
         const lipDistSq = lipX * lipX + lipY * lipY;
-        if (lipDistSq < 1.0 && pz > 0.042) {
-          const lipAlpha = Math.max(0, 1.0 - lipDistSq);
-          const curLip = skinColorObj.clone().lerp(lipColorObj, 0.40 + 0.58 * lipAlpha);
-          bodyColors.push(curLip.r, curLip.g, curLip.b);
-        }
-        // Soft peach-rose blush on cheekbones (healthy youthful glow)
-        else if (absPx >= 0.022 && absPx <= 0.065 && py >= 1.495 && py <= 1.545 && pz > 0.038) {
-          const blushDist = Math.hypot((absPx - 0.042) / 0.018, (py - 1.522) / 0.022);
+        if (lipDistSq < 1.0 && pz > 0.047) {
+          const lipT = 1.0 - Math.sqrt(lipDistSq);
+          const lipAlpha = lipT * lipT * (3 - 2 * lipT);
+          const naturalLipColor = skinColorObj.clone().lerp(lipColorObj, 0.15 + 0.55 * lipAlpha);
+          allCols.push(naturalLipColor.r, naturalLipColor.g, naturalLipColor.b);
+        } else if (absPx >= 0.024 && absPx <= 0.055 && py >= 1.500 && py <= 1.540 && pz > 0.042) {
+          const blushDist = Math.hypot((absPx - 0.038) / 0.016, (py - 1.520) / 0.018);
           if (blushDist < 1.0) {
-            const bAlpha = (1.0 - blushDist) * 0.28;
+            const bAlpha = (1.0 - blushDist) * 0.20;
             const blushed = skinColorObj.clone().lerp(blushColorObj, bAlpha);
-            bodyColors.push(blushed.r, blushed.g, blushed.b);
+            allCols.push(blushed.r, blushed.g, blushed.b);
           } else {
-            bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+            allCols.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
           }
         } else {
-          bodyColors.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
+          allCols.push(skinColorObj.r, skinColorObj.g, skinColorObj.b);
         }
       }
     }
   }
 
-  const bodyIndices: number[] = bodyTriangles.map((oldIdx) => bodyRemap.get(oldIdx)!);
+  // Extract head and hands submeshes
+  const headBuf = extractSubmeshBuffer(headTris, allPos, allCols);
+  const lhBuf = extractSubmeshBuffer(lhTris, allPos, allCols);
+  const rhBuf = extractSubmeshBuffer(rhTris, allPos, allCols);
+
+  // Generate organic anatomy sub-assemblies (feminine proportions, scale = 1.68 / 1.78)
+  const neckBuf = generateOrganicNeck('female', fScale);
+  const torsoBuf = generateOrganicTorso('female', fScale);
+  const pelvisBuf = generateOrganicPelvis('female', fScale);
+  const lUpperArmBuf = generateOrganicArm('upperarm', 'left', fScale);
+  const rUpperArmBuf = generateOrganicArm('upperarm', 'right', fScale);
+  const lForearmBuf = generateOrganicArm('forearm', 'left', fScale);
+  const rForearmBuf = generateOrganicArm('forearm', 'right', fScale);
+  const lThighBuf = generateOrganicLeg('thigh', 'left', fScale);
+  const rThighBuf = generateOrganicLeg('thigh', 'right', fScale);
+  const lShinBuf = generateOrganicLeg('shin', 'left', fScale);
+  const rShinBuf = generateOrganicLeg('shin', 'right', fScale);
+  const lFootBuf = generateOrganicFoot('left', fScale);
+  const rFootBuf = generateOrganicFoot('right', fScale);
+
+  const skinMaterial: MaterialProperties = {
+    color: skinColor,
+    roughness: 0.48,
+    metalness: 0.0,
+    emissive: '#000000',
+    emissiveIntensity: 0,
+    transmission: 0,
+    opacity: 1,
+    transparent: false,
+    wireframe: false,
+    texturePreset: 'skin_tone',
+    vertexColors: true,
+  };
+
+  // Build the 16 Modular Body Part SceneItems
+  const bodyParts: SceneItem[] = [
+    createSceneItemFromBuffer('female-head', 'Head & Cranium', headBuf, skinMaterial),
+    createSceneItemFromBuffer('female-neck', 'Neck', neckBuf, skinMaterial),
+    createSceneItemFromBuffer('female-torso', 'Chest & Torso', torsoBuf, skinMaterial),
+    createSceneItemFromBuffer('female-pelvis', 'Pelvis & Hips', pelvisBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-upperarm', 'Left Upper Arm', lUpperArmBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-forearm', 'Left Forearm', lForearmBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-hand', 'Left Hand', lhBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-upperarm', 'Right Upper Arm', rUpperArmBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-forearm', 'Right Forearm', rForearmBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-hand', 'Right Hand', rhBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-thigh', 'Left Thigh', lThighBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-shin', 'Left Shin', lShinBuf, skinMaterial),
+    createSceneItemFromBuffer('female-left-foot', 'Left Bare Foot', lFootBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-thigh', 'Right Thigh', rThighBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-shin', 'Right Shin', rShinBuf, skinMaterial),
+    createSceneItemFromBuffer('female-right-foot', 'Right Bare Foot', rFootBuf, skinMaterial),
+  ];
+
+  // Merge all 16 sub-assemblies into a single high-fidelity organic body mesh
+  const mergedBodyBuffer = mergeMeshBuffers([
+    headBuf, neckBuf, torsoBuf, pelvisBuf,
+    lUpperArmBuf, lForearmBuf, lhBuf,
+    rUpperArmBuf, rForearmBuf, rhBuf,
+    lThighBuf, lShinBuf, lFootBuf,
+    rThighBuf, rShinBuf, rFootBuf,
+  ]);
 
   let bodyGeo = new THREE.BufferGeometry();
-  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(bodyPositions, 3));
-  bodyGeo.setAttribute('color', new THREE.Float32BufferAttribute(bodyColors, 3));
-  bodyGeo.setIndex(bodyIndices);
-  bodyGeo.computeVertexNormals();
+  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(mergedBodyBuffer.positions, 3));
+  bodyGeo.setAttribute('normal', new THREE.Float32BufferAttribute(mergedBodyBuffer.normals, 3));
+  if (mergedBodyBuffer.colors) {
+    bodyGeo.setAttribute('color', new THREE.Float32BufferAttribute(mergedBodyBuffer.colors, 3));
+  }
+  bodyGeo.setIndex(mergedBodyBuffer.indices);
 
   if (shouldSubdivide) {
     bodyGeo = applySubdivisionRefinement(bodyGeo, 1);
   }
 
+  // Ensure unit length, outward-pointing chest normals
   const normAttr = bodyGeo.getAttribute('normal') as THREE.BufferAttribute;
   const pAttr = bodyGeo.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < normAttr.count; i++) {
@@ -1363,7 +1401,7 @@ export function generateRealisticFemaleScene(
   const finalBodyNormals = Array.from(normAttr.array as Float32Array);
   const finalBodyColors = bodyGeo.getAttribute('color')
     ? Array.from(bodyGeo.getAttribute('color').array as Float32Array)
-    : bodyColors;
+    : mergedBodyBuffer.colors!;
   const finalBodyIndices = Array.from(bodyGeo.index!.array as Uint16Array | Uint32Array);
   const finalBodyUvs = new Array((finalBodyPositions.length / 3) * 2).fill(0);
 
@@ -1386,24 +1424,14 @@ export function generateRealisticFemaleScene(
       rotation: [0, 0, 0],
       scale: [1, 1, 1],
     },
-    material: {
-      color: skinColor,
-      roughness: 0.48,
-      metalness: 0.0,
-      emissive: '#000000',
-      emissiveIntensity: 0,
-      transmission: 0,
-      opacity: 1,
-      transparent: false,
-      wireframe: false,
-      texturePreset: 'skin_tone',
-      vertexColors: true,
-    },
+    material: skinMaterial,
     visible: true,
     locked: false,
   };
 
-  const allItems: SceneItem[] = [bodyItem];
+  const allItems: SceneItem[] = modularBodyParts
+    ? [...bodyParts]
+    : [bodyItem];
 
   // Helper to build clothing & footwear SceneItems from quads
   function buildItemFromQuads(
@@ -1454,11 +1482,11 @@ export function generateRealisticFemaleScene(
     geo.setIndex(indices);
     geo.computeVertexNormals();
 
-    // Conformal normal extrusion (+4.5mm for tops, +3.8mm for pants) ensuring 100% clean drapery over skin
-    if (id === 'female-top' || id === 'female-jeans') {
+    // Conformal normal extrusion (+5.0mm for tops, +4.5mm for jeans, +5.5mm for sneakers) ensuring 100% clean drapery over skin
+    if (id === 'female-top' || id === 'female-jeans' || id === 'female-sneakers') {
       const pAttr = geo.getAttribute('position') as THREE.BufferAttribute;
       const nAttr = geo.getAttribute('normal') as THREE.BufferAttribute;
-      const offset = id === 'female-top' ? 0.0045 : 0.0038;
+      const offset = id === 'female-top' ? 0.0050 : (id === 'female-jeans' ? 0.0045 : 0.0055);
       for (let i = 0; i < pAttr.count; i++) {
         pAttr.setXYZ(
           i,
@@ -1466,6 +1494,20 @@ export function generateRealisticFemaleScene(
           pAttr.getY(i) + nAttr.getY(i) * offset,
           pAttr.getZ(i) + nAttr.getZ(i) * offset
         );
+      }
+      geo.computeVertexNormals();
+    }
+
+    if (id === 'female-sneakers') {
+      const pAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+      let minY = Infinity;
+      for (let i = 0; i < pAttr.count; i++) {
+        if (pAttr.getY(i) < minY) minY = pAttr.getY(i);
+      }
+      if (minY !== 0 && Math.abs(minY) > 1e-4) {
+        for (let i = 0; i < pAttr.count; i++) {
+          pAttr.setY(i, pAttr.getY(i) - minY);
+        }
       }
       geo.computeVertexNormals();
     }
@@ -1669,6 +1711,7 @@ export function generateRealisticFemaleScene(
 
   return {
     bodyItem,
+    bodyParts,
     clothingUpperItem,
     clothingLowerItem,
     footwearItem,

@@ -55,16 +55,27 @@ export const Viewport: React.FC<ViewportProps> = ({
   const canvasHolderRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
-  const characterBodyItem = sceneItems?.find(
-    (it) => it.id === 'female-body' || it.id === 'human-body' || it.id === 'male-body'
-  );
-  const characterClothesItems = sceneItems?.filter(
-    (it) =>
-      it.id.includes('top') ||
-      it.id.includes('shirt') ||
-      it.id.includes('jeans') ||
-      it.id.includes('pants')
-  );
+  const isBodyPart = (id: string) =>
+    id === 'female-body' ||
+    id === 'human-body' ||
+    id === 'male-body' ||
+    (id.startsWith('female-') &&
+      !['female-top', 'female-jeans', 'female-sneakers', 'female-accessories'].includes(id)) ||
+    (id.startsWith('male-') &&
+      !['male-shirt', 'male-pants', 'male-shoes', 'male-accessories'].includes(id)) ||
+    (id.startsWith('human-') &&
+      !['human-shirt', 'human-pants', 'human-shoes', 'human-accessories'].includes(id));
+
+  const isClothing = (id: string) =>
+    id.includes('top') ||
+    id.includes('shirt') ||
+    id.includes('jeans') ||
+    id.includes('pants') ||
+    id.includes('sneakers') ||
+    id.includes('shoes');
+
+  const characterBodyItems = sceneItems?.filter((it) => isBodyPart(it.id)) || [];
+  const characterClothesItems = sceneItems?.filter((it) => isClothing(it.id)) || [];
 
   const hiddenCount = sceneItems ? sceneItems.filter((it) => !it.visible).length : 0;
 
@@ -235,23 +246,30 @@ export const Viewport: React.FC<ViewportProps> = ({
       )}
 
       {/* Quick Character Anatomy & Garment Visibility Toggles */}
-      {(characterBodyItem || (characterClothesItems && characterClothesItems.length > 0)) && (
+      {(characterBodyItems.length > 0 || characterClothesItems.length > 0) && (
         <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 bg-studio-900/90 border border-studio-700/60 px-2.5 py-1 rounded-xl shadow-xl backdrop-blur-md z-10 text-xs">
-          {characterBodyItem && onToggleVisibility && (
+          {characterBodyItems.length > 0 && onToggleVisibility && (
             <button
-              onClick={() => onToggleVisibility(characterBodyItem.id)}
+              onClick={() => {
+                const anyVisible = characterBodyItems.some((b) => b.visible);
+                characterBodyItems.forEach((b) => {
+                  if (anyVisible ? b.visible : !b.visible) {
+                    onToggleVisibility(b.id);
+                  }
+                });
+              }}
               className={`px-2 py-0.5 rounded-lg flex items-center space-x-1.5 font-medium transition ${
-                characterBodyItem.visible
+                characterBodyItems.some((b) => b.visible)
                   ? 'bg-studio-800 text-slate-200 hover:bg-studio-700'
                   : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
               }`}
-              title={characterBodyItem.visible ? 'Hide Character Body' : 'Show Character Body'}
+              title={characterBodyItems.some((b) => b.visible) ? 'Hide Character Body' : 'Show Character Body'}
             >
-              {characterBodyItem.visible ? <Eye size={12} className="text-emerald-400" /> : <EyeOff size={12} className="text-amber-400" />}
-              <span>Body: {characterBodyItem.visible ? 'Visible' : 'Hidden'}</span>
+              {characterBodyItems.some((b) => b.visible) ? <Eye size={12} className="text-emerald-400" /> : <EyeOff size={12} className="text-amber-400" />}
+              <span>Body: {characterBodyItems.some((b) => b.visible) ? 'Visible' : 'Hidden'}</span>
             </button>
           )}
-          {characterClothesItems && characterClothesItems.length > 0 && onToggleVisibility && (
+          {characterClothesItems.length > 0 && onToggleVisibility && (
             <button
               onClick={() => {
                 const anyVisible = characterClothesItems.some((c) => c.visible);
@@ -474,17 +492,22 @@ export const Viewport: React.FC<ViewportProps> = ({
               </>
             )}
 
-            {characterBodyItem && onToggleVisibility && (
+            {characterBodyItems.length > 0 && onToggleVisibility && (
               <button
                 onClick={() => {
-                  onToggleVisibility(characterBodyItem.id);
+                  const anyVisible = characterBodyItems.some((b) => b.visible);
+                  characterBodyItems.forEach((b) => {
+                    if (anyVisible ? b.visible : !b.visible) {
+                      onToggleVisibility(b.id);
+                    }
+                  });
                   setContextMenu(null);
                 }}
                 className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
               >
                 <span className="flex items-center space-x-2">
-                  {characterBodyItem.visible ? <EyeOff size={13} className="text-amber-400" /> : <Eye size={13} className="text-emerald-400" />}
-                  <span>{characterBodyItem.visible ? 'Hide Character Body' : 'Show Character Body'}</span>
+                  {characterBodyItems.some((b) => b.visible) ? <EyeOff size={13} className="text-amber-400" /> : <Eye size={13} className="text-emerald-400" />}
+                  <span>{characterBodyItems.some((b) => b.visible) ? 'Hide Character Body' : 'Show Character Body'}</span>
                 </span>
               </button>
             )}
