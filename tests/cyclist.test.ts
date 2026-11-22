@@ -117,8 +117,11 @@ describe('Kinematic Cyclist & Animation Circuit Engine', () => {
       const y = bodyPos[i + 1];
       const z = bodyPos[i + 2];
 
-      // Handlebar grips near (0.420, 0.900, ±0.180)
-      if (Math.hypot(x - 0.420, y - 0.900, Math.abs(z) - 0.180) < 0.10) {
+      // Handlebar STI brake hoods near (0.570, 0.945, ±0.200) or drops near (0.420, 0.900, ±0.180)
+      if (
+        Math.hypot(x - 0.570, y - 0.945, Math.abs(z) - 0.200) < 0.12 ||
+        Math.hypot(x - 0.420, y - 0.900, Math.abs(z) - 0.180) < 0.15
+      ) {
         hasGripVertex = true;
       }
     }

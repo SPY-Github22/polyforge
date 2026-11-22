@@ -55,6 +55,17 @@ export const Viewport: React.FC<ViewportProps> = ({
   const canvasHolderRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  const characterBodyItem = sceneItems?.find(
+    (it) => it.id === 'female-body' || it.id === 'human-body' || it.id === 'male-body'
+  );
+  const characterClothesItems = sceneItems?.filter(
+    (it) =>
+      it.id.includes('top') ||
+      it.id.includes('shirt') ||
+      it.id.includes('jeans') ||
+      it.id.includes('pants')
+  );
+
   const hiddenCount = sceneItems ? sceneItems.filter((it) => !it.visible).length : 0;
 
   // Transfer container ref
@@ -218,6 +229,47 @@ export const Viewport: React.FC<ViewportProps> = ({
               className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition"
             >
               <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Quick Character Anatomy & Garment Visibility Toggles */}
+      {(characterBodyItem || (characterClothesItems && characterClothesItems.length > 0)) && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center space-x-1.5 bg-studio-900/90 border border-studio-700/60 px-2.5 py-1 rounded-xl shadow-xl backdrop-blur-md z-10 text-xs">
+          {characterBodyItem && onToggleVisibility && (
+            <button
+              onClick={() => onToggleVisibility(characterBodyItem.id)}
+              className={`px-2 py-0.5 rounded-lg flex items-center space-x-1.5 font-medium transition ${
+                characterBodyItem.visible
+                  ? 'bg-studio-800 text-slate-200 hover:bg-studio-700'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+              }`}
+              title={characterBodyItem.visible ? 'Hide Character Body' : 'Show Character Body'}
+            >
+              {characterBodyItem.visible ? <Eye size={12} className="text-emerald-400" /> : <EyeOff size={12} className="text-amber-400" />}
+              <span>Body: {characterBodyItem.visible ? 'Visible' : 'Hidden'}</span>
+            </button>
+          )}
+          {characterClothesItems && characterClothesItems.length > 0 && onToggleVisibility && (
+            <button
+              onClick={() => {
+                const anyVisible = characterClothesItems.some((c) => c.visible);
+                characterClothesItems.forEach((c) => {
+                  if (anyVisible ? c.visible : !c.visible) {
+                    onToggleVisibility(c.id);
+                  }
+                });
+              }}
+              className={`px-2 py-0.5 rounded-lg flex items-center space-x-1.5 font-medium transition ${
+                characterClothesItems.some((c) => c.visible)
+                  ? 'bg-studio-800 text-slate-200 hover:bg-studio-700'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
+              }`}
+              title={characterClothesItems.some((c) => c.visible) ? 'Hide All Clothes' : 'Show All Clothes'}
+            >
+              {characterClothesItems.some((c) => c.visible) ? <Eye size={12} className="text-blue-400" /> : <EyeOff size={12} className="text-amber-400" />}
+              <span>Clothes: {characterClothesItems.some((c) => c.visible) ? 'Visible' : 'Hidden'}</span>
             </button>
           )}
         </div>
@@ -420,6 +472,41 @@ export const Viewport: React.FC<ViewportProps> = ({
                   </button>
                 )}
               </>
+            )}
+
+            {characterBodyItem && onToggleVisibility && (
+              <button
+                onClick={() => {
+                  onToggleVisibility(characterBodyItem.id);
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+              >
+                <span className="flex items-center space-x-2">
+                  {characterBodyItem.visible ? <EyeOff size={13} className="text-amber-400" /> : <Eye size={13} className="text-emerald-400" />}
+                  <span>{characterBodyItem.visible ? 'Hide Character Body' : 'Show Character Body'}</span>
+                </span>
+              </button>
+            )}
+
+            {characterClothesItems && characterClothesItems.length > 0 && onToggleVisibility && (
+              <button
+                onClick={() => {
+                  const anyVisible = characterClothesItems.some((c) => c.visible);
+                  characterClothesItems.forEach((c) => {
+                    if (anyVisible ? c.visible : !c.visible) {
+                      onToggleVisibility(c.id);
+                    }
+                  });
+                  setContextMenu(null);
+                }}
+                className="w-full px-3 py-1.5 text-left flex items-center justify-between hover:bg-studio-800 hover:text-white transition"
+              >
+                <span className="flex items-center space-x-2">
+                  {characterClothesItems.some((c) => c.visible) ? <EyeOff size={13} className="text-amber-400" /> : <Eye size={13} className="text-blue-400" />}
+                  <span>{characterClothesItems.some((c) => c.visible) ? 'Hide All Clothes' : 'Show All Clothes'}</span>
+                </span>
+              </button>
             )}
 
             {onUnhideAll && (

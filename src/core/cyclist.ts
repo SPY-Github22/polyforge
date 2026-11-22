@@ -60,8 +60,9 @@ export function poseCharacterAsCyclist(
 ): RealisticHumanResult {
   const isFemale = gender === 'female';
   const saddlePos = new THREE.Vector3(-0.150, 0.890, 0.0);
-  const leftGrip = new THREE.Vector3(0.420, 0.900, -0.180);
-  const rightGrip = new THREE.Vector3(0.420, 0.900, 0.180);
+  // Grip coordinates locked directly onto road bike STI brake hoods at (0.570, 0.945, ±0.200)
+  const leftGrip = new THREE.Vector3(0.570, 0.945, -0.200);
+  const rightGrip = new THREE.Vector3(0.570, 0.945, 0.200);
 
   // Pedal coordinates at neutral crank angle (-0.45 rad)
   const leftPedal = new THREE.Vector3(-0.155, 0.355, -0.075);
@@ -87,14 +88,14 @@ export function poseCharacterAsCyclist(
 
   // Elbow natural flexion positions
   const leftElbow = new THREE.Vector3(
-    (leftShoulder.x + leftGrip.x) * 0.5 - 0.02,
-    (leftShoulder.y + leftGrip.y) * 0.5 - 0.04,
-    -shoulderZOffset - 0.03
+    (leftShoulder.x + leftGrip.x) * 0.5 - 0.01,
+    (leftShoulder.y + leftGrip.y) * 0.5 - 0.03,
+    -shoulderZOffset - 0.02
   );
   const rightElbow = new THREE.Vector3(
-    (rightShoulder.x + rightGrip.x) * 0.5 - 0.02,
-    (rightShoulder.y + rightGrip.y) * 0.5 - 0.04,
-    shoulderZOffset + 0.03
+    (rightShoulder.x + rightGrip.x) * 0.5 - 0.01,
+    (rightShoulder.y + rightGrip.y) * 0.5 - 0.03,
+    shoulderZOffset + 0.02
   );
 
   // Posed hip and knee positions
@@ -108,11 +109,6 @@ export function poseCharacterAsCyclist(
   const armStartY = standingShoulderY + 0.04;
   const wristLevelY = isFemale ? 0.84 : 0.88;
   const handEndY = isFemale ? 0.68 : 0.72;
-
-  function smoothstep(edge0: number, edge1: number, x: number): number {
-    const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
-    return t * t * (3 - 2 * t);
-  }
 
   function getArmPos(x0: number, y0: number, z0: number): [number, number, number] {
     const absX = Math.abs(x0);
@@ -164,14 +160,14 @@ export function poseCharacterAsCyclist(
     const neckBaseY = saddlePos.y + torsoHeight * cosLean;
     const h = y0 - standingShoulderY;
     const neckLen = 0.085;
-    const headPitch = 0.14; // Natural horizontal gaze
+    const headPitch = 0.08; // Level forward gaze along the racetrack
 
     let spinePtX = neckBaseX;
     let spinePtY = neckBaseY;
     let localAngle = torsoLeanRad;
 
     if (h <= neckLen) {
-      // Cervical neck: smooth Hermite blend from torso lean (~36°) to head gaze (~8°)
+      // Cervical neck: smooth Hermite blend from torso lean (~36°) to head gaze (~5°)
       const v = Math.max(0, Math.min(1, h / neckLen));
       const t = v * v * (3 - 2 * v);
       localAngle = (1 - t) * torsoLeanRad + t * headPitch;
@@ -222,7 +218,8 @@ export function poseCharacterAsCyclist(
     x0: number,
     y0: number,
     z0: number,
-    itemId: string
+    itemId: string,
+    isArm = false
   ): [number, number, number] {
     const absX = Math.abs(x0);
     const side = x0 < 0 ? -1 : 1; // -1 = Left, +1 = Right
@@ -245,45 +242,25 @@ export function poseCharacterAsCyclist(
       return [footCenterX, footCenterY, footCenterZ];
     }
 
-    // 1. Upper Garment (Shirt/Top): smooth linear blend skinning between Torso and Sleeves
-    if (isUpperGarment) {
-      let w = 0;
-      if (y0 >= 1.20) {
-        w = smoothstep(0.15, 0.22, absX);
-      } else if (y0 >= 1.05) {
-        w = smoothstep(0.17, 0.26, absX);
-      } else {
-        w = smoothstep(0.18, 0.27, absX);
+    // 1. Upper Garment & Body Skin: topological arm segmentation
+    if (isUpperGarment || isBody) {
+      if (isArm) {
+        return getArmPos(x0, y0, z0);
       }
-      if (w <= 0) return getTorsoPos(x0, y0, z0);
-      if (w >= 1) return getArmPos(x0, y0, z0);
-      const [tx, ty, tz] = getTorsoPos(x0, y0, z0);
-      const [ax, ay, az] = getArmPos(x0, y0, z0);
-      return [
-        (1 - w) * tx + w * ax,
-        (1 - w) * ty + w * ay,
-        (1 - w) * tz + w * az,
-      ];
-    }
-
-    // 2. Anatomical Classification for Body & Accessories
-    let isArm = false;
-    if (isBody) {
-      if (y0 >= 1.22 && y0 <= armStartY) {
-        isArm = absX > 0.185;
-      } else if (y0 >= 1.15 && y0 < 1.22) {
-        const bX = 0.220 - (y0 - 1.15) * (0.220 - 0.185) / 0.07;
-        isArm = absX > bX;
-      } else if (y0 >= 0.90 && y0 < 1.15) {
-        isArm = absX > 0.200;
-      } else if (y0 < 0.90 && y0 >= handEndY - 0.08) {
-        isArm = absX > 0.160; // Cleanly capture all hand & finger vertices
+      if (y0 > standingShoulderY) {
+        return getNeckHeadPos(x0, y0, z0);
       }
+      if (y0 >= standingPelvisY) {
+        return getTorsoPos(x0, y0, z0);
+      }
+      // Lower torso / pelvic seat
+      const dy = y0 - standingPelvisY;
+      const pelvicTilt = 0.26;
+      const cx = saddlePos.x + z0 * Math.cos(pelvicTilt) + dy * Math.sin(pelvicTilt);
+      const cy = saddlePos.y + dy * Math.cos(pelvicTilt) - z0 * Math.sin(pelvicTilt);
+      const cz = saddlePos.z + x0;
+      return [cx, cy, cz];
     } else if (isAccessory) {
-      isArm = y0 < 1.20 && absX > 0.18; // Smartwatch on wrist
-    }
-
-    if (isArm) {
       return getArmPos(x0, y0, z0);
     }
 
@@ -371,36 +348,106 @@ export function poseCharacterAsCyclist(
     const numVerts = origPositions.length / 3;
     const newPositions = new Float32Array(origPositions.length);
 
+    const isUpperGarment = item.id.includes('shirt') || item.id.includes('top');
+    const isLowerGarment = item.id.includes('jeans') || item.id.includes('pants');
+    const isBody = item.id.includes('body');
+
+    // Topological arm segmentation: cleanly identify all vertices belonging to the arm kinematic chain
+    const armVerts = new Set<number>();
+    if ((isBody || isUpperGarment) && custom.indices && custom.indices.length > 0) {
+      const adj = new Map<number, Set<number>>();
+      for (let t = 0; t < custom.indices.length; t += 3) {
+        const a = custom.indices[t];
+        const b = custom.indices[t + 1];
+        const c = custom.indices[t + 2];
+        for (const [v1, v2] of [[a, b], [b, c], [c, a]]) {
+          let s1 = adj.get(v1);
+          if (!s1) { s1 = new Set(); adj.set(v1, s1); }
+          s1.add(v2);
+          let s2 = adj.get(v2);
+          if (!s2) { s2 = new Set(); adj.set(v2, s2); }
+          s2.add(v1);
+        }
+      }
+
+      // Seed vertices from the hands / sleeve cuffs
+      const seedMinX = isBody ? 0.235 : 0.18;
+      for (let i = 0; i < numVerts; i++) {
+        const x = origPositions[i * 3];
+        const y = origPositions[i * 3 + 1];
+        if (y < 0.92 && Math.abs(x) > seedMinX) {
+          armVerts.add(i);
+        }
+      }
+
+      // Grow topological arm BFS across sleeve cylinder up to the shoulder seam
+      const queue = Array.from(armVerts);
+      while (queue.length > 0) {
+        const u = queue.shift()!;
+        const ux = origPositions[u * 3];
+        const isRight = ux > 0;
+        for (const v of adj.get(u) || []) {
+          if (!armVerts.has(v)) {
+            const vx = origPositions[v * 3];
+            const vy = origPositions[v * 3 + 1];
+            const sideCheck = isRight ? vx > 0 : vx < 0;
+            const ribCheck = Math.abs(vx) >= 0.155 && vy <= 1.34;
+            if (sideCheck && ribCheck) {
+              armVerts.add(v);
+              queue.push(v);
+            }
+          }
+        }
+      }
+    }
+
     for (let i = 0; i < numVerts; i++) {
       const x0 = origPositions[i * 3];
       const y0 = origPositions[i * 3 + 1];
       const z0 = origPositions[i * 3 + 2];
 
-      const [xb, yb, zb] = deformVertex(x0, y0, z0, item.id);
+      const isArm = armVerts.has(i);
+      const [xb, yb, zb] = deformVertex(x0, y0, z0, item.id, isArm);
       newPositions[i * 3] = xb;
       newPositions[i * 3 + 1] = yb;
       newPositions[i * 3 + 2] = zb;
     }
 
-    const isLowerGarment = item.id.includes('jeans') || item.id.includes('pants');
-    const isBody = item.id.includes('body');
-
     let finalIndices = custom.indices;
-    if (articulated && (isBody || isLowerGarment) && custom.indices && custom.indices.length > 0) {
+    if (custom.indices && custom.indices.length > 0) {
       const keptIndices: number[] = [];
+      const legCullY = isFemale ? 0.68 : 0.70;
+      const maxAllowedEdge = 0.12; // 12cm max triangle edge length to prevent degenerate stretched webbing across joints
+
       for (let t = 0; t < custom.indices.length; t += 3) {
         const i0 = custom.indices[t];
         const i1 = custom.indices[t + 1];
         const i2 = custom.indices[t + 2];
-        const y0_0 = origPositions[i0 * 3 + 1];
-        const y0_1 = origPositions[i1 * 3 + 1];
-        const y0_2 = origPositions[i2 * 3 + 1];
 
-        // Keep the entire pelvic seat, groin, buttocks, and upper hip cuffs 100% solid (cutoff at 0.68m)
-        const legCullY = isFemale ? 0.68 : 0.70;
-        if (y0_0 < legCullY && y0_1 < legCullY && y0_2 < legCullY) {
-          continue;
+        // 1. Articulated leg culling: remove lower leg / shin triangles replaced by articulated limbs
+        if (articulated && (isBody || isLowerGarment)) {
+          const y0_0 = origPositions[i0 * 3 + 1];
+          const y0_1 = origPositions[i1 * 3 + 1];
+          const y0_2 = origPositions[i2 * 3 + 1];
+          if (y0_0 < legCullY || y0_1 < legCullY || y0_2 < legCullY) {
+            continue;
+          }
         }
+
+        // 2. Anti-stretching filter for upper garment and body: cull any degenerate stretched triangles
+        if (isBody || isUpperGarment) {
+          const x0 = newPositions[i0 * 3], y0 = newPositions[i0 * 3 + 1], z0 = newPositions[i0 * 3 + 2];
+          const x1 = newPositions[i1 * 3], y1 = newPositions[i1 * 3 + 1], z1 = newPositions[i1 * 3 + 2];
+          const x2 = newPositions[i2 * 3], y2 = newPositions[i2 * 3 + 1], z2 = newPositions[i2 * 3 + 2];
+
+          const d01 = Math.hypot(x1 - x0, y1 - y0, z1 - z0);
+          const d12 = Math.hypot(x2 - x1, y2 - y1, z2 - z1);
+          const d20 = Math.hypot(x0 - x2, y0 - y2, z0 - z2);
+          if (Math.max(d01, d12, d20) > maxAllowedEdge) {
+            continue;
+          }
+        }
+
         keptIndices.push(i0, i1, i2);
       }
       finalIndices = keptIndices;
@@ -503,8 +550,35 @@ function buildShoeItem(
   name: string,
   color = '#f8fafc'
 ): SceneItem {
-  const geom = new THREE.BoxGeometry(0.24, 0.07, 0.08, 4, 2, 2);
+  const geom = new THREE.BoxGeometry(0.24, 0.07, 0.08, 6, 3, 3);
   geom.translate(0.03, 0.035, 0);
+  const posAttr = geom.getAttribute('position');
+  for (let i = 0; i < posAttr.count; i++) {
+    let px = posAttr.getX(i);
+    let py = posAttr.getY(i);
+    let pz = posAttr.getZ(i);
+
+    // Contoured road cycling shoe silhouette
+    // Toe taper: narrow aerodynamic toe box for px > 0.04
+    if (px > 0.04) {
+      const taper = 1.0 - ((px - 0.04) / 0.12) * 0.35;
+      pz *= Math.max(0.65, taper);
+      // Slight toe spring curve upward
+      py += Math.pow((px - 0.04) / 0.11, 2) * 0.012;
+    }
+    // Heel cup taper: px < -0.04
+    if (px < -0.04) {
+      const heelTaper = 1.0 - ((-0.04 - px) / 0.06) * 0.25;
+      pz *= Math.max(0.75, heelTaper);
+    }
+    // Ankle cuff collar contour: dip collar under malleolus
+    if (py > 0.05 && px > -0.03 && px < 0.05) {
+      py -= 0.010;
+    }
+    posAttr.setXYZ(i, px, py, pz);
+  }
+  geom.computeVertexNormals();
+
   const pos = Array.from(geom.getAttribute('position').array as Float32Array);
   const norm = Array.from(geom.getAttribute('normal').array as Float32Array);
   const idx = Array.from(geom.index!.array as Uint16Array);
@@ -956,6 +1030,20 @@ export function generateAnimatedCyclistCircuit(
   }
 
   const allItems: SceneItem[] = [...modularBicycle.allItems, ...cyclistItems];
+
+  // Synchronize initial item transforms with Frame 0 keyframes
+  for (const track of tracks) {
+    if (track.keyframes.length > 0) {
+      const targetItem = allItems.find((it) => it.id === track.objectId);
+      if (targetItem) {
+        targetItem.transform = {
+          position: [...track.keyframes[0].transform.position] as [number, number, number],
+          rotation: [...track.keyframes[0].transform.rotation] as [number, number, number],
+          scale: [...track.keyframes[0].transform.scale] as [number, number, number],
+        };
+      }
+    }
+  }
 
   const bStats = modularBicycle.stats;
   let totalCyclistVerts = 0;
