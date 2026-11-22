@@ -22,6 +22,7 @@ interface ViewportProps {
   transformMode: TransformMode;
   selectedObjectName: string | null;
   selectedItem?: SceneItem | null;
+  sceneItems?: SceneItem[];
   onResetCamera: () => void;
   onFocusSelected: () => void;
   onChangeCameraView: (view: CameraView) => void;
@@ -40,6 +41,7 @@ export const Viewport: React.FC<ViewportProps> = ({
   transformMode,
   selectedObjectName,
   selectedItem,
+  sceneItems,
   onResetCamera,
   onFocusSelected,
   onChangeCameraView,
@@ -52,6 +54,8 @@ export const Viewport: React.FC<ViewportProps> = ({
 }) => {
   const canvasHolderRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const hiddenCount = sceneItems ? sceneItems.filter((it) => !it.visible).length : 0;
 
   // Transfer container ref
   useEffect(() => {
@@ -102,7 +106,13 @@ export const Viewport: React.FC<ViewportProps> = ({
         {selectedObjectName && (
           <div className="bg-studio-900/80 backdrop-blur-md border border-studio-accent/40 px-2.5 py-1 rounded text-[11px] font-mono text-slate-200 shadow-md flex items-center space-x-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-studio-accent animate-ping" />
+            <span className="text-slate-400">Selected:</span>
             <span className="font-semibold text-blue-400">{selectedObjectName}</span>
+            {selectedItem && !selectedItem.visible && (
+              <span className="ml-1 px-1.5 py-0.2 bg-amber-500/30 text-amber-300 text-[9px] rounded font-mono font-bold">
+                HIDDEN
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -119,6 +129,23 @@ export const Viewport: React.FC<ViewportProps> = ({
               {selectedItem.name}
             </span>
           </div>
+
+          {/* If selected object is hidden, show clear alert badge */}
+          {!selectedItem.visible && (
+            <div className="flex items-center space-x-1.5 px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold mr-1 animate-pulse">
+              <EyeOff size={13} className="text-amber-400" />
+              <span>HIDDEN</span>
+              {onToggleVisibility && (
+                <button
+                  onClick={() => onToggleVisibility(selectedItem.id)}
+                  className="ml-1 px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[10px] transition shadow"
+                  title="Click to restore visibility (H)"
+                >
+                  Show
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Visibility Toggle Button */}
           {onToggleVisibility && (
@@ -279,6 +306,22 @@ export const Viewport: React.FC<ViewportProps> = ({
           Objects: <span className="text-slate-200 font-semibold">{stats.objectsCount}</span>
         </div>
       </div>
+
+      {/* Bottom Right: Global Hidden Objects Notification Banner */}
+      {hiddenCount > 0 && onUnhideAll && (
+        <div className="absolute bottom-3 right-3 z-20">
+          <button
+            onClick={onUnhideAll}
+            className="bg-studio-900/95 hover:bg-amber-500 hover:text-slate-950 text-amber-300 border border-amber-500/50 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md transition flex items-center space-x-2 group cursor-pointer"
+            title="Restore visibility of all hidden objects (Alt+H)"
+          >
+            <EyeOff size={14} className="text-amber-400 group-hover:text-slate-950" />
+            <span>
+              {hiddenCount} object{hiddenCount > 1 ? 's' : ''} hidden • <span className="underline decoration-amber-400 font-bold">Unhide All (Alt+H)</span>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Right-Click 3D Context Menu */}
       {contextMenu && (

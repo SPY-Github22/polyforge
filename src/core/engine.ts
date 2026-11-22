@@ -51,6 +51,10 @@ export class Engine {
   private shadingMode: ShadingMode = 'rendered';
   private currentTransformMode: TransformMode = 'translate';
 
+  // Selection Visualizers (CAD Bounding Box & Surface Contour Silhouette)
+  private selectionBoxHelper: THREE.BoxHelper | null = null;
+  private selectionOutlineMesh: THREE.LineSegments | null = null;
+
   // Stats calculation
   private lastTime = performance.now();
   private frameCount = 0;
@@ -251,9 +255,15 @@ export class Engine {
     } else {
       this.transformControls.setMode(mode);
       if (this.selectedId && this.objectMap.has(this.selectedId)) {
-        this.transformControls.attach(this.objectMap.get(this.selectedId)!);
+        const mesh = this.objectMap.get(this.selectedId)!;
+        if (mesh.visible) {
+          this.transformControls.attach(mesh);
+        } else {
+          this.transformControls.detach();
+        }
       }
     }
+    this.updateSelectionVisuals();
   }
 
   public setShadingMode(mode: ShadingMode) {
@@ -355,13 +365,85 @@ export class Engine {
     this.selectedId = id;
     if (id && this.objectMap.has(id)) {
       const mesh = this.objectMap.get(id)!;
-      if (this.currentTransformMode !== 'select') {
+      if (this.currentTransformMode !== 'select' && mesh.visible) {
         this.transformControls.attach(mesh);
       } else {
         this.transformControls.detach();
       }
     } else {
       this.transformControls.detach();
+    }
+    this.updateSelectionVisuals();
+  }
+
+  private clearSelectionOutline() {
+    if (this.selectionOutlineMesh) {
+      if (this.selectionOutlineMesh.parent) {
+        this.selectionOutlineMesh.parent.remove(this.selectionOutlineMesh);
+      }
+      this.selectionOutlineMesh.geometry.dispose();
+      if (Array.isArray(this.selectionOutlineMesh.material)) {
+        this.selectionOutlineMesh.material.forEach((m) => m.dispose());
+      } else {
+        this.selectionOutlineMesh.material.dispose();
+      }
+      this.selectionOutlineMesh = null;
+    }
+  }
+
+  /**
+   * Updates CAD-style bounding box and contour silhouette edge highlights on selected mesh.
+   */
+  private updateSelectionVisuals() {
+    if (!this.selectedId || !this.objectMap.has(this.selectedId)) {
+      if (this.selectionBoxHelper) {
+        this.selectionBoxHelper.visible = false;
+      }
+      this.clearSelectionOutline();
+      return;
+    }
+
+    const mesh = this.objectMap.get(this.selectedId)!;
+
+    if (!mesh.visible) {
+      if (this.selectionBoxHelper) {
+        this.selectionBoxHelper.visible = false;
+      }
+      this.clearSelectionOutline();
+      this.transformControls.detach();
+      return;
+    }
+
+    // 1. Update / Create BoxHelper (CAD-style bright electric cyan bounding frame)
+    if (!this.selectionBoxHelper) {
+      this.selectionBoxHelper = new THREE.BoxHelper(mesh, 0x0ea5e9);
+      (this.selectionBoxHelper.material as THREE.LineBasicMaterial).depthTest = false;
+      (this.selectionBoxHelper.material as THREE.LineBasicMaterial).transparent = true;
+      (this.selectionBoxHelper.material as THREE.LineBasicMaterial).opacity = 0.85;
+      this.selectionBoxHelper.renderOrder = 998;
+      this.scene.add(this.selectionBoxHelper);
+    } else {
+      this.selectionBoxHelper.setFromObject(mesh);
+      this.selectionBoxHelper.visible = true;
+    }
+
+    // 2. Update / Create Contour Edge Outline on the selected mesh
+    if (!this.selectionOutlineMesh || this.selectionOutlineMesh.parent !== mesh) {
+      this.clearSelectionOutline();
+      try {
+        const edgeGeo = new THREE.EdgesGeometry(mesh.geometry, 24);
+        const edgeMat = new THREE.LineBasicMaterial({
+          color: 0x38bdf8,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.75,
+        });
+        this.selectionOutlineMesh = new THREE.LineSegments(edgeGeo, edgeMat);
+        this.selectionOutlineMesh.renderOrder = 997;
+        mesh.add(this.selectionOutlineMesh);
+      } catch {
+        // Fallback for non-indexable geometry
+      }
     }
   }
 
@@ -477,14 +559,17 @@ export class Engine {
     // Update active transform controls attachment
     if (this.selectedId && this.objectMap.has(this.selectedId)) {
       const selectedMesh = this.objectMap.get(this.selectedId)!;
-      if (this.currentTransformMode !== 'select') {
+      if (this.currentTransformMode !== 'select' && selectedMesh.visible) {
         if (this.transformControls.object !== selectedMesh) {
           this.transformControls.attach(selectedMesh);
         }
       } else {
         this.transformControls.detach();
       }
+    } else {
+      this.transformControls.detach();
     }
+    this.updateSelectionVisuals();
   }
 
   /**
@@ -497,6 +582,8 @@ export class Engine {
     mesh.geometry.dispose();
     const baseGeo = createPrimitiveGeometry(item.primitiveType || 'box', item.geometryParams);
     mesh.geometry = applyModifiers(baseGeo, item.modifiers);
+    this.clearSelectionOutline();
+    this.updateSelectionVisuals();
   }
 
   public getMeshById(id: string): THREE.Mesh | undefined {
@@ -510,10 +597,14 @@ export class Engine {
     const gridVis = this.gridHelper.visible;
     const axesVis = this.axesHelper.visible;
     const gizmoVis = this.transformControls.getHelper().visible;
+    const boxVis = this.selectionBoxHelper ? this.selectionBoxHelper.visible : false;
+    const outlineVis = this.selectionOutlineMesh ? this.selectionOutlineMesh.visible : false;
 
     this.gridHelper.visible = false;
     this.axesHelper.visible = false;
     this.transformControls.getHelper().visible = false;
+    if (this.selectionBoxHelper) this.selectionBoxHelper.visible = false;
+    if (this.selectionOutlineMesh) this.selectionOutlineMesh.visible = false;
 
     this.renderer.render(this.scene, this.camera);
     const dataURL = this.renderer.domElement.toDataURL('image/png');
@@ -527,6 +618,8 @@ export class Engine {
     this.gridHelper.visible = gridVis;
     this.axesHelper.visible = axesVis;
     this.transformControls.getHelper().visible = gizmoVis;
+    if (this.selectionBoxHelper) this.selectionBoxHelper.visible = boxVis;
+    if (this.selectionOutlineMesh) this.selectionOutlineMesh.visible = outlineVis;
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -537,6 +630,16 @@ export class Engine {
 
     // Update orbit controls damping
     this.orbitControls.update();
+
+    // Dynamically align selection bounding box helper to moving/animated objects
+    if (this.selectionBoxHelper && this.selectionBoxHelper.visible && this.selectedId) {
+      const selMesh = this.objectMap.get(this.selectedId);
+      if (selMesh && selMesh.visible) {
+        this.selectionBoxHelper.setFromObject(selMesh);
+      } else {
+        this.selectionBoxHelper.visible = false;
+      }
+    }
 
     // Render frame
     this.renderer.render(this.scene, this.camera);
@@ -586,6 +689,14 @@ export class Engine {
     } else {
       this.shadowPlane.material.dispose();
     }
+
+    if (this.selectionBoxHelper) {
+      this.scene.remove(this.selectionBoxHelper);
+      this.selectionBoxHelper.geometry.dispose();
+      (this.selectionBoxHelper.material as THREE.Material).dispose();
+      this.selectionBoxHelper = null;
+    }
+    this.clearSelectionOutline();
 
     this.transformControls.dispose();
     this.orbitControls.dispose();

@@ -994,6 +994,7 @@ export const App: React.FC = () => {
           transformMode={transformMode}
           selectedObjectName={selectedItem ? selectedItem.name : null}
           selectedItem={selectedItem}
+          sceneItems={sceneItems}
           onResetCamera={() => setCameraView('perspective')}
           onFocusSelected={() => {
             if (engineRef.current) {
